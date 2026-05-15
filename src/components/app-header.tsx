@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, X, AlertTriangle, Clock, Package } from "lucide-react";
+import { Bell, X, AlertTriangle, Clock, Package, Menu } from "lucide-react";
 import type { NotificationData } from "@/lib/actions/notifications";
 
-export function AppHeader({ notifData, userName }: { notifData: NotificationData; userName?: string }) {
+export function AppHeader({ notifData, userName, onMenuClick }: { notifData: NotificationData; userName?: string; onMenuClick?: () => void }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -67,7 +67,14 @@ export function AppHeader({ notifData, userName }: { notifData: NotificationData
   };
 
   return (
-    <header className="h-14 border-b bg-white flex items-center px-6 gap-4 sticky top-0 z-10">
+    <header className="h-14 border-b bg-white flex items-center px-4 md:px-6 gap-4 sticky top-0 z-10">
+      {/* Hamburger — samo na mobilnom */}
+      <button
+        onClick={onMenuClick}
+        className="md:hidden w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
       <div className="flex-1" />
 
       <div className="relative">

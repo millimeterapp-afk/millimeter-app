@@ -17,6 +17,7 @@ import {
   Truck,
   CalendarDays,
   ScanBarcode,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +40,15 @@ const bottomItems = [
   { label: "Podešavanja", href: "/settings", icon: Settings },
 ];
 
-export function AppSidebar({ userName, userEmail }: { userName?: string; userEmail?: string }) {
+export function AppSidebar({
+  userName,
+  userEmail,
+  onClose,
+}: {
+  userName?: string;
+  userEmail?: string;
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -51,10 +60,14 @@ export function AppSidebar({ userName, userEmail }: { userName?: string; userEma
     router.refresh();
   };
 
+  const handleNavClick = () => {
+    onClose?.();
+  };
+
   return (
-    <aside className="w-60 shrink-0 border-r bg-white flex flex-col h-screen sticky top-0">
+    <aside className="w-60 shrink-0 border-r bg-white flex flex-col h-screen">
       {/* Logo */}
-      <div className="px-6 py-5 border-b">
+      <div className="px-6 py-5 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-black rounded-md flex items-center justify-center">
             <span className="text-white text-xs font-bold">MM</span>
@@ -64,6 +77,15 @@ export function AppSidebar({ userName, userEmail }: { userName?: string; userEma
             <p className="text-xs text-muted-foreground mt-0.5">Crna Gora</p>
           </div>
         </div>
+        {/* X dugme — samo na mobilnom */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="md:hidden w-7 h-7 flex items-center justify-center rounded-md hover:bg-muted transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -75,6 +97,7 @@ export function AppSidebar({ userName, userEmail }: { userName?: string; userEma
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNavClick}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
                 isActive
@@ -98,6 +121,7 @@ export function AppSidebar({ userName, userEmail }: { userName?: string; userEma
             <Link
               key={item.href}
               href={item.href}
+              onClick={handleNavClick}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
                 isActive
