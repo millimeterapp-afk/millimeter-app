@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -101,8 +101,8 @@ export function ReportsClient({
       {/* KPI kartice */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Ukupan prihod", value: `€${totalRevenue.toLocaleString()}`, icon: TrendingUp, color: "bg-black text-white" },
-          { label: "Prosek / mesec", value: `€${avgMonthly.toLocaleString()}`, icon: TrendingUp, color: "bg-blue-100 text-blue-700" },
+          { label: "Ukupan prihod", value: `RSD ${totalRevenue.toLocaleString()}`, icon: TrendingUp, color: "bg-black text-white" },
+          { label: "Prosek / mesec", value: `RSD ${avgMonthly.toLocaleString()}`, icon: TrendingUp, color: "bg-blue-100 text-blue-700" },
           { label: "Ukupno klijenata", value: String(customers.length), icon: Users, color: "bg-green-100 text-green-700" },
           { label: "Ukupno naloga", value: String(orders.length), icon: ClipboardList, color: "bg-yellow-100 text-yellow-700" },
         ].map((s) => {
@@ -138,7 +138,7 @@ export function ReportsClient({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v) => [`€${v}`, "Prihod"]} contentStyle={{ fontSize: 12 }} />
+                  <Tooltip formatter={(v) => [`RSD ${v}`, "Prihod"]} contentStyle={{ fontSize: 12 }} />
                   <Bar dataKey="prihod" fill="#18181b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -197,7 +197,7 @@ export function ReportsClient({
                     />
                   </div>
                 </div>
-                <span className="text-sm font-bold shrink-0">€{Number(c.totalSpent).toLocaleString()}</span>
+                <span className="text-sm font-bold shrink-0">RSD {Number(c.totalSpent).toLocaleString()}</span>
               </div>
             )) : (
               <p className="text-sm text-muted-foreground">Nema klijenata</p>
@@ -280,7 +280,7 @@ export function ReportsClient({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-zinc-400">Najbolji mesec</p>
-                <p className="text-3xl font-bold mt-1">€{bestMonth.prihod.toLocaleString()}</p>
+                <p className="text-3xl font-bold mt-1">RSD {bestMonth.prihod.toLocaleString()}</p>
                 <p className="text-zinc-400 text-sm mt-1">{bestMonth.month}</p>
               </div>
               <TrendingUp className="w-12 h-12 text-zinc-600" />

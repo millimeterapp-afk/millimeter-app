@@ -74,7 +74,7 @@ export function AppSidebar({
           </div>
           <div>
             <p className="text-sm font-semibold leading-none">Millimeter</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Crna Gora</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Srbija</p>
           </div>
         </div>
         {/* X dugme — samo na mobilnom */}

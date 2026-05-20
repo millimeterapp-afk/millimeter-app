@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -230,7 +230,7 @@ export function SuppliersClient({
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="font-semibold">€{Number(inv.totalAmount).toLocaleString("sr-RS", { minimumFractionDigits: 2 })}</p>
+                      <p className="font-semibold">RSD {Number(inv.totalAmount).toLocaleString("sr-RS", { minimumFractionDigits: 2 })}</p>
                       <p className="text-xs text-muted-foreground">{inv.items.length} stavki</p>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[inv.status] ?? "bg-gray-100"}`}>
@@ -257,12 +257,12 @@ export function SuppliersClient({
                           <div key={item.id} className="grid grid-cols-12 gap-2 text-sm px-2 py-1 rounded hover:bg-muted/30">
                             <span className="col-span-5 font-medium truncate">{item.description}</span>
                             <span className="col-span-2 text-right text-muted-foreground">{Number(item.quantity).toFixed(2)}</span>
-                            <span className="col-span-2 text-right text-muted-foreground">€{Number(item.unitPrice).toFixed(2)}</span>
+                            <span className="col-span-2 text-right text-muted-foreground">RSD {Number(item.unitPrice).toFixed(2)}</span>
                             <span className="col-span-1 text-right text-muted-foreground text-xs">
-                              +€{Number(item.allocatedAdditionalCost ?? 0).toFixed(2)}
+                              +RSD {Number(item.allocatedAdditionalCost ?? 0).toFixed(2)}
                             </span>
                             <span className="col-span-2 text-right font-semibold text-green-700">
-                              €{Number(item.finalUnitCost ?? item.unitPrice).toFixed(2)}/kom
+                              RSD {Number(item.finalUnitCost ?? item.unitPrice).toFixed(2)}/kom
                             </span>
                           </div>
                         ))}
@@ -281,7 +281,7 @@ export function SuppliersClient({
                                 {c.customsDutyRate ? ` (${c.customsDutyRate}%)` : ""}
                                 {c.description ? ` — ${c.description}` : ""}
                               </span>
-                              <span className="font-medium">€{Number(c.amount).toFixed(2)}</span>
+                              <span className="font-medium">RSD {Number(c.amount).toFixed(2)}</span>
                             </div>
                           ))}
                         </div>
@@ -291,9 +291,9 @@ export function SuppliersClient({
                     {/* Sumarni red */}
                     <div className="border-t pt-3 flex items-center justify-between">
                       <div className="flex gap-6 text-sm">
-                        <div><span className="text-muted-foreground">Roba: </span><span className="font-medium">€{Number(inv.subtotal).toFixed(2)}</span></div>
-                        <div><span className="text-muted-foreground">Troškovi: </span><span className="font-medium">€{Number(inv.totalAdditionalCosts).toFixed(2)}</span></div>
-                        <div><span className="text-muted-foreground">Ukupno: </span><span className="font-bold">€{Number(inv.totalAmount).toFixed(2)}</span></div>
+                        <div><span className="text-muted-foreground">Roba: </span><span className="font-medium">RSD {Number(inv.subtotal).toFixed(2)}</span></div>
+                        <div><span className="text-muted-foreground">Troškovi: </span><span className="font-medium">RSD {Number(inv.totalAdditionalCosts).toFixed(2)}</span></div>
+                        <div><span className="text-muted-foreground">Ukupno: </span><span className="font-bold">RSD {Number(inv.totalAmount).toFixed(2)}</span></div>
                       </div>
                       {inv.status === "draft" && (
                         <button onClick={() => handlePost(inv.id)} disabled={isPending}
@@ -503,7 +503,7 @@ export function SuppliersClient({
                             className="mt-1" />
                         </div>
                         <div>
-                          <label className="text-xs font-medium text-muted-foreground">Jed. cena (€)</label>
+                          <label className="text-xs font-medium text-muted-foreground">Jed. cena (RSD )</label>
                           <Input type="number" value={item.unitPrice} min="0" step="0.01"
                             onChange={e => updateItem(item._id, "unitPrice", Number(e.target.value))}
                             className="mt-1" />
@@ -512,7 +512,7 @@ export function SuppliersClient({
 
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">
-                          Ukupno: <strong>€{((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}</strong>
+                          Ukupno: <strong>RSD {((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}</strong>
                         </span>
                         <button type="button" onClick={() => removeItem(item._id)}
                           className="text-red-500 hover:text-red-700">
@@ -555,7 +555,7 @@ export function SuppliersClient({
                             className="w-24" placeholder="Stopa %" />
                           <span className="text-xs text-muted-foreground">%</span>
                           <span className="text-xs text-orange-700 ml-2">
-                            = €{((subtotal * (cost.customsDutyRate ?? 0)) / 100).toFixed(2)}
+                            = RSD {((subtotal * (cost.customsDutyRate ?? 0)) / 100).toFixed(2)}
                           </span>
                         </div>
                       ) : (
@@ -565,7 +565,7 @@ export function SuppliersClient({
                             className="flex-1" placeholder="Opis (opciono)" />
                           <Input type="number" value={cost.amount} min="0" step="0.01"
                             onChange={e => updateCost(idx, "amount", Number(e.target.value))}
-                            className="w-28" placeholder="Iznos €" />
+                            className="w-28" placeholder="Iznos RSD " />
                         </div>
                       )}
                       <button type="button" onClick={() => removeCost(idx)}
@@ -583,17 +583,17 @@ export function SuppliersClient({
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rekapitulacija</p>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Roba (subtotal)</span>
-                    <span className="font-medium">€{subtotal.toFixed(2)}</span>
+                    <span className="font-medium">RSD {subtotal.toFixed(2)}</span>
                   </div>
                   {additionalCosts.length > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Dodatni troškovi</span>
-                      <span className="font-medium text-orange-700">+ €{totalAdditional.toFixed(2)}</span>
+                      <span className="font-medium text-orange-700">+ RSD {totalAdditional.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-bold text-base border-t pt-2">
                     <span>Ukupno (landed cost)</span>
-                    <span>€{totalAmount.toFixed(2)}</span>
+                    <span>RSD {totalAmount.toFixed(2)}</span>
                   </div>
                   {invoiceItems.length > 0 && subtotal > 0 && (
                     <div className="pt-1 space-y-1">
@@ -606,7 +606,7 @@ export function SuppliersClient({
                         return (
                           <div key={item._id} className="flex justify-between text-xs">
                             <span className="text-muted-foreground truncate max-w-[60%]">{item.description || "—"}</span>
-                            <span className="font-medium text-green-700">€{realCost.toFixed(2)}/kom</span>
+                            <span className="font-medium text-green-700">RSD {realCost.toFixed(2)}/kom</span>
                           </div>
                         );
                       })}

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -78,7 +78,7 @@ export function DashboardClient({
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Prihod ovog meseca</p>
-                  <p className="text-2xl font-bold mt-1">€{thisMonthRevenue.toLocaleString()}</p>
+                  <p className="text-2xl font-bold mt-1">RSD {thisMonthRevenue.toLocaleString()}</p>
                   <p className="text-xs text-green-600 flex items-center gap-1 mt-1"><ArrowUpRight className="w-3 h-3" />iz baze</p>
                 </div>
                 <div className="w-9 h-9 bg-black rounded-md flex items-center justify-center shrink-0">
@@ -112,7 +112,7 @@ export function DashboardClient({
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Nenaplaćeno</p>
-                  <p className="text-2xl font-bold mt-1 text-red-600">€{Math.round(unpaidAmount).toLocaleString()}</p>
+                  <p className="text-2xl font-bold mt-1 text-red-600">RSD {Math.round(unpaidAmount).toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground mt-1">{unpaidOrders.length} otvorenih</p>
                 </div>
                 <div className="w-9 h-9 bg-red-100 rounded-md flex items-center justify-center shrink-0">
@@ -158,7 +158,7 @@ export function DashboardClient({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v) => [`€${v}`, "Prihod"]} contentStyle={{ fontSize: 12 }} />
+                  <Tooltip formatter={(v) => [`RSD ${v}`, "Prihod"]} contentStyle={{ fontSize: 12 }} />
                   <Bar dataKey="prihod" fill="#18181b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -249,7 +249,7 @@ export function DashboardClient({
             {topCustomers.length > 0 ? topCustomers.map((c) => (
               <Link key={c.id} href={`/customers/${c.id}`} className="flex items-center justify-between text-sm hover:underline">
                 <span className="text-muted-foreground truncate">{c.firstName} {c.lastName}</span>
-                <span className="font-medium shrink-0">€{Number(c.totalSpent).toLocaleString()}</span>
+                <span className="font-medium shrink-0">RSD {Number(c.totalSpent).toLocaleString()}</span>
               </Link>
             )) : (
               <p className="text-sm text-muted-foreground">Nema klijenata još</p>

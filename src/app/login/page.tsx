@@ -85,7 +85,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          Millimeter D.O.O. · Podgorica, Crna Gora
+          Millimeter D.O.O. · Beograd, Srbija
         </p>
       </div>
     </div>

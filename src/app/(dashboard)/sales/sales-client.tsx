@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -171,7 +171,7 @@ export function SalesClient({
               />
               <Input
                 type="number"
-                placeholder="Cena (€)"
+                placeholder="Cena (RSD )"
                 value={manualPrice}
                 onChange={(e) => setManualPrice(e.target.value)}
                 className="w-28 h-8 text-sm"
@@ -216,7 +216,7 @@ export function SalesClient({
                         </span>
                       )}
                     </div>
-                    <p className="text-base font-bold mt-2">€{Number(item.salePrice ?? 0).toLocaleString()}</p>
+                    <p className="text-base font-bold mt-2">RSD {Number(item.salePrice ?? 0).toLocaleString()}</p>
                   </button>
                 );
               })}
@@ -245,7 +245,7 @@ export function SalesClient({
                     <div key={item.id} className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">€{item.price} × {item.qty}</p>
+                        <p className="text-xs text-muted-foreground">RSD {item.price} × {item.qty}</p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button
@@ -265,7 +265,7 @@ export function SalesClient({
                   ))}
                   <div className="pt-3 border-t flex justify-between text-base font-bold">
                     <span>Ukupno</span>
-                    <span>€{total.toLocaleString()}</span>
+                    <span>RSD {total.toLocaleString()}</span>
                   </div>
                 </div>
               )}
@@ -307,7 +307,7 @@ export function SalesClient({
                 disabled={cart.length === 0 || isPending}
                 className="w-full bg-black text-white py-2.5 rounded-md text-sm font-medium hover:bg-black/80 transition-colors disabled:opacity-40"
               >
-                {isPending ? "Čuvanje..." : `Naplati €${total.toLocaleString()}`}
+                {isPending ? "Čuvanje..." : `Naplati RSD ${total.toLocaleString()}`}
               </button>
             </CardContent>
           </Card>
@@ -350,7 +350,7 @@ export function SalesClient({
                       <td className="px-4 py-3 text-sm">
                         {new Date(s.createdAt).toLocaleDateString("sr-RS")}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm font-bold">€{Number(s.totalAmount).toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right text-sm font-bold">RSD {Number(s.totalAmount).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -242,7 +242,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
           { label: "Materijali", value: String(materials.length) },
           { label: "Gotova roba", value: String(inventoryItems.length) },
           { label: "Niske zalihe (mat.)", value: `${materials.filter(m => (Number(m.currentStock) - Number(m.reservedStock)) < 5).length} art.`, color: "text-orange-600" },
-          { label: "Vrednost zaliha", value: `€${Math.round(totalMaterialValue + totalItemValue).toLocaleString()}` },
+          { label: "Vrednost zaliha", value: `RSD ${Math.round(totalMaterialValue + totalItemValue).toLocaleString()}` },
         ].map((s) => (
           <Card key={s.label}><CardContent className="pt-4 pb-4">
             <p className="text-sm text-muted-foreground">{s.label}</p>
@@ -324,7 +324,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                     className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
                     {["m", "kom", "kg"].map(u => <option key={u}>{u}</option>)}
                   </select></div>
-                <div><label className="text-xs font-medium text-muted-foreground">Cena/jed. (€)</label>
+                <div><label className="text-xs font-medium text-muted-foreground">Cena/jed. (RSD )</label>
                   <Input type="number" value={editMatForm.price} onChange={(e) => setEditMatForm({ ...editMatForm, price: e.target.value })} className="mt-1" placeholder="0" /></div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Min. nivo zaliha</label>
@@ -391,9 +391,9 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                   <Input value={editItemForm.category} onChange={(e) => setEditItemForm({ ...editItemForm, category: e.target.value })} className="mt-1" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-muted-foreground">Prod. cena (€)</label>
+                <div><label className="text-xs font-medium text-muted-foreground">Prod. cena (RSD )</label>
                   <Input type="number" value={editItemForm.salePrice} onChange={(e) => setEditItemForm({ ...editItemForm, salePrice: e.target.value })} className="mt-1" placeholder="0" /></div>
-                <div><label className="text-xs font-medium text-muted-foreground">Nabavna (€)</label>
+                <div><label className="text-xs font-medium text-muted-foreground">Nabavna (RSD )</label>
                   <Input type="number" value={editItemForm.costPrice} onChange={(e) => setEditItemForm({ ...editItemForm, costPrice: e.target.value })} className="mt-1" placeholder="0" /></div>
               </div>
               <div className="flex gap-2 pt-2">
@@ -437,7 +437,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                     </select></div>
                   <div><label className="text-xs font-medium text-muted-foreground">Poč. stanje</label>
                     <Input type="number" value={matForm.stock} onChange={(e) => setMatForm({ ...matForm, stock: e.target.value })} className="mt-1" placeholder="0" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground">Cena/jed. (€)</label>
+                  <div><label className="text-xs font-medium text-muted-foreground">Cena/jed. (RSD )</label>
                     <Input type="number" value={matForm.price} onChange={(e) => setMatForm({ ...matForm, price: e.target.value })} className="mt-1" placeholder="0" /></div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Min. nivo zaliha</label>
@@ -465,9 +465,9 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                 <div className="grid grid-cols-3 gap-3">
                   <div><label className="text-xs font-medium text-muted-foreground">Količina</label>
                     <Input type="number" value={itemForm.quantity} onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })} className="mt-1" placeholder="0" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground">Prod. cena (€)</label>
+                  <div><label className="text-xs font-medium text-muted-foreground">Prod. cena (RSD )</label>
                     <Input type="number" value={itemForm.salePrice} onChange={(e) => setItemForm({ ...itemForm, salePrice: e.target.value })} className="mt-1" placeholder="0" /></div>
-                  <div><label className="text-xs font-medium text-muted-foreground">Nabavna (€)</label>
+                  <div><label className="text-xs font-medium text-muted-foreground">Nabavna (RSD )</label>
                     <Input type="number" value={itemForm.costPrice} onChange={(e) => setItemForm({ ...itemForm, costPrice: e.target.value })} className="mt-1" placeholder="0" /></div>
                 </div>
                 <div className="flex gap-2 pt-2">
@@ -533,7 +533,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                         ) : <span className="text-sm text-muted-foreground">—</span>}
                       </td>
                       <td className="px-4 py-3 text-sm text-right text-muted-foreground">
-                        {item.lastPurchasePrice ? `€${item.lastPurchasePrice}/${item.unit}` : "—"}
+                        {item.lastPurchasePrice ? `RSD ${item.lastPurchasePrice}/${item.unit}` : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center gap-1 justify-end">
@@ -604,10 +604,10 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-right font-medium">
-                        {item.salePrice ? `€${Number(item.salePrice).toLocaleString()}` : "—"}
+                        {item.salePrice ? `RSD ${Number(item.salePrice).toLocaleString()}` : "—"}
                       </td>
                       <td className="px-4 py-3 text-sm text-right text-muted-foreground">
-                        {item.costPrice ? `€${Number(item.costPrice).toLocaleString()}` : "—"}
+                        {item.costPrice ? `RSD ${Number(item.costPrice).toLocaleString()}` : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center gap-1 justify-end">

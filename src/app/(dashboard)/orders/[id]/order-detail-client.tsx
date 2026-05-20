@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -236,8 +236,8 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
           </div>
         </div>` : ""}
         ${order.notes ? `<div class="section"><h2>Napomene</h2><p style="font-size:14px">${order.notes}</p></div>` : ""}
-        <div class="total">Ukupno: €${totalAmount.toLocaleString()}</div>
-        <div class="footer">Millimeter D.O.O. · Podgorica, Crna Gora · Štampano: ${printDate}</div>
+        <div class="total">Ukupno: RSD ${totalAmount.toLocaleString()}</div>
+        <div class="footer">Millimeter D.O.O. · Beograd, Srbija · Štampano: ${printDate}</div>
         <script>window.onload = () => { window.print(); }<\/script>
       </body></html>
     `);
@@ -359,7 +359,7 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Cena (€)</label>
+                  <label className="text-xs font-medium text-muted-foreground">Cena (RSD )</label>
                   <Input type="number" value={editForm.totalAmount} onChange={e => setEditForm({ ...editForm, totalAmount: e.target.value })} className="mt-1" />
                 </div>
                 <div>
@@ -488,7 +488,7 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
                 { label: "Datum naloga", value: new Date(order.createdAt).toLocaleDateString("sr-RS") },
                 { label: "Rok isporuke", value: order.dueDate ?? "—", orange: !!order.dueDate },
                 { label: "Šablon broj", value: order.templateNumber ?? "—", mono: true },
-                { label: "Cena", value: `€${totalAmount.toLocaleString()}`, bold: true },
+                { label: "Cena", value: `RSD ${totalAmount.toLocaleString()}`, bold: true },
               ].map((f) => (
                 <div key={f.label}>
                   <p className="text-xs text-muted-foreground">{f.label}</p>
@@ -576,16 +576,16 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
             <div className="flex items-center gap-8 flex-wrap">
               <div>
                 <p className="text-xs text-muted-foreground">Ukupno</p>
-                <p className="text-xl font-bold">€{totalAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold">RSD {totalAmount.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Plaćeno</p>
-                <p className="text-xl font-bold text-green-600">€{paidAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold text-green-600">RSD {paidAmount.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Ostatak</p>
                 <p className={`text-xl font-bold ${remaining > 0 ? "text-red-600" : "text-green-600"}`}>
-                  €{remaining.toLocaleString()}
+                  RSD {remaining.toLocaleString()}
                 </p>
               </div>
               <div className="ml-auto">
@@ -602,7 +602,7 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
             {showPayment && (
               <div className="mt-4 pt-4 border-t flex items-end gap-3 flex-wrap">
                 <div>
-                  <label className="text-xs text-muted-foreground font-medium">Iznos (€)</label>
+                  <label className="text-xs text-muted-foreground font-medium">Iznos (RSD )</label>
                   <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)}
                     className="mt-1 w-36" placeholder={String(remaining)} />
                 </div>

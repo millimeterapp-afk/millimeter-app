@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -200,7 +200,7 @@ export function OrdersClient({
                       ) : <span className="text-sm text-muted-foreground">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <p className="text-sm font-medium">€{Number(order.totalAmount).toLocaleString()}</p>
+                      <p className="text-sm font-medium">RSD {Number(order.totalAmount).toLocaleString()}</p>
                       <p className={`text-xs ${order.paymentStatus === "paid" ? "text-green-600" : "text-orange-600"}`}>
                         {order.paymentStatus === "paid" ? "Plaćeno" : order.paymentStatus === "partial" ? "Djelimično" : "Neplaćeno"}
                       </p>

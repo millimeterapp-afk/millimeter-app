@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -266,7 +266,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
                     <p className="text-xs text-muted-foreground">{customer.visitCount} poseta</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-sm font-medium">€{Number(customer.totalSpent).toLocaleString()}</p>
+                    <p className="text-sm font-medium">RSD {Number(customer.totalSpent).toLocaleString()}</p>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tierColors[customer.loyaltyTier] ?? "bg-gray-100 text-gray-700"}`}>

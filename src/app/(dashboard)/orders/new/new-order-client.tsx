@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -223,7 +223,7 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
                 <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="mt-1" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Cijena (€)</label>
+                <label className="text-xs font-medium text-muted-foreground">Cijena (RSD )</label>
                 <Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-1" placeholder="185" />
               </div>
             </div>
@@ -359,7 +359,7 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
               ))}
               <div className="flex justify-between text-sm border-t pt-3">
                 <span className="text-muted-foreground">Cijena</span>
-                <span className="font-bold text-base">€{form.amount || "—"}</span>
+                <span className="font-bold text-base">RSD {form.amount || "—"}</span>
               </div>
             </div>
             {form.notes && (

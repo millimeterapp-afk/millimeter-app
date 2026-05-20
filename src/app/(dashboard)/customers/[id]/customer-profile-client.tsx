@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -277,7 +277,7 @@ export function CustomerProfileClient({ customer, appointments }: { customer: Cu
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Ukupno potrošeno</span>
-                <span className="font-semibold">€{Number(customer.totalSpent).toLocaleString()}</span>
+                <span className="font-semibold">RSD {Number(customer.totalSpent).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Broj poseta</span>
@@ -389,7 +389,7 @@ export function CustomerProfileClient({ customer, appointments }: { customer: Cu
                       className="mt-1 h-8 text-sm" placeholder="npr. Košulja po meri" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground">Iznos (€) *</label>
+                    <label className="text-xs text-muted-foreground">Iznos (RSD ) *</label>
                     <Input type="number" value={historicalForm.totalAmount} onChange={e => setHistoricalForm({ ...historicalForm, totalAmount: e.target.value })}
                       className="mt-1 h-8 text-sm" placeholder="0" />
                   </div>
@@ -451,7 +451,7 @@ export function CustomerProfileClient({ customer, appointments }: { customer: Cu
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right text-sm font-medium">
-                          {Number(order.totalAmount) > 0 ? `€${Number(order.totalAmount).toLocaleString()}` : "—"}
+                          {Number(order.totalAmount) > 0 ? `RSD ${Number(order.totalAmount).toLocaleString()}` : "—"}
                         </td>
                       </tr>
                     ))}
