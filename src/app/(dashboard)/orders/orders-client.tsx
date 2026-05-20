@@ -175,7 +175,12 @@ export function OrdersClient({
                       ) : <span className="text-sm text-muted-foreground">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-xs bg-muted px-2 py-0.5 rounded">{typeLabels[order.orderType] ?? order.orderType}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded">{typeLabels[order.orderType] ?? order.orderType}</span>
+                        {(order as Order & { productionFlow?: string }).productionFlow === "munro" && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-medium">Munro</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[order.status] ?? "bg-gray-100"}`}>

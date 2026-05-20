@@ -153,6 +153,7 @@ export const orders = pgTable("orders", {
   item: text("item"),
   material: text("material"),
   templateNumber: text("template_number"),
+  productionFlow: text("production_flow").default("millimeter").notNull(),
   collarType: text("collar_type"),
   sleeveType: text("sleeve_type"),
   fitType: text("fit_type"),

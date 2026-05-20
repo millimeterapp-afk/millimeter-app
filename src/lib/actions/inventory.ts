@@ -5,6 +5,7 @@ import { materials, inventoryItems, inventoryMovements } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import * as XLSX from "xlsx";
 
 async function getCurrentUser() {
   const supabase = await createClient();
@@ -278,4 +279,78 @@ export async function getInventoryMovements() {
     .where(eq(inventoryMovements.companyId, dbUser.companyId!))
     .orderBy(desc(inventoryMovements.createdAt))
     .limit(100);
+}
+
+export async function importMaterials(formData: FormData) {
+  const { dbUser } = await getCurrentUser();
+  const file = formData.get("file") as File | null;
+  if (!file) throw new Error("Fajl nije pronađen");
+
+  const buffer = new Uint8Array(await file.arrayBuffer());
+  const wb = XLSX.read(buffer, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+  const toInsert = rows
+    .filter((row) => row["Naziv"])
+    .map((row) => {
+      const jm = String(row["JM"] ?? "").toUpperCase();
+      const unit = jm === "KOM" ? "kom" : jm === "KG" ? "kg" : "m";
+      const rawPrice = Number(row["Nab. cena sa PDV"] ?? row["Nab.cena sa PDV"] ?? 0);
+      return {
+        companyId: dbUser.companyId!,
+        name: String(row["Naziv"]),
+        code: row["Šifra"] ? String(row["Šifra"]) : null,
+        barcode: row["Barkod"] ? String(row["Barkod"]) : null,
+        category: row["Grupa"] ? String(row["Grupa"]) : null,
+        unit,
+        currentStock: "0",
+        reservedStock: "0",
+        lastPurchasePrice: rawPrice > 0 ? String(rawPrice) : null,
+        reorderLevel: "5",
+      };
+    });
+
+  const CHUNK = 100;
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    await db.insert(materials).values(toInsert.slice(i, i + CHUNK));
+  }
+
+  revalidatePath("/inventory");
+  return { inserted: toInsert.length, total: rows.length };
+}
+
+export async function importInventoryItems(formData: FormData) {
+  const { dbUser } = await getCurrentUser();
+  const file = formData.get("file") as File | null;
+  if (!file) throw new Error("Fajl nije pronađen");
+
+  const buffer = new Uint8Array(await file.arrayBuffer());
+  const wb = XLSX.read(buffer, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+  const toInsert = rows
+    .filter((row) => row["Naziv"])
+    .map((row) => {
+      const rawPrice = Number(row["Cena"] ?? 0);
+      return {
+        companyId: dbUser.companyId!,
+        name: String(row["Naziv"]),
+        sku: row["Šifra"] ? String(row["Šifra"]) : null,
+        category: row["Grupa"] ? String(row["Grupa"]) : null,
+        quantity: 0,
+        reservedQuantity: 0,
+        salePrice: rawPrice > 0 ? String(rawPrice) : null,
+        costPrice: null,
+      };
+    });
+
+  const CHUNK = 100;
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    await db.insert(inventoryItems).values(toInsert.slice(i, i + CHUNK));
+  }
+
+  revalidatePath("/inventory");
+  return { inserted: toInsert.length, total: rows.length };
 }

@@ -70,6 +70,7 @@ async function generateOrderNumber(companyId: string): Promise<string> {
 export async function createOrder(data: {
   customerId: string;
   orderType: "custom" | "ready_made" | "correction";
+  productionFlow?: "millimeter" | "munro";
   dueDate?: string;
   totalAmount: number;
   notes?: string;
@@ -109,6 +110,7 @@ export async function createOrder(data: {
       dueDate: data.dueDate || null,
       totalAmount: String(data.totalAmount),
       notes: data.notes || null,
+      productionFlow: data.productionFlow ?? "millimeter",
       item: data.item || null,
       material: data.material || null,
       templateNumber: data.templateNumber || null,
@@ -294,6 +296,7 @@ export async function updateOrder(
     sleeveType?: string;
     fitType?: string;
     material?: string;
+    productionFlow?: "millimeter" | "munro";
   }
 ) {
   const { dbUser } = await getCurrentUser();
@@ -309,6 +312,7 @@ export async function updateOrder(
       ...( data.sleeveType !== undefined && { sleeveType: data.sleeveType }),
       ...( data.fitType !== undefined && { fitType: data.fitType }),
       ...( data.material !== undefined && { material: data.material || null }),
+      ...( data.productionFlow !== undefined && { productionFlow: data.productionFlow }),
       updatedAt: new Date(),
     })
     .where(and(eq(orders.id, id), eq(orders.companyId, dbUser.companyId!)));

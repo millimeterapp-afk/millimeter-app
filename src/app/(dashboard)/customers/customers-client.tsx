@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createCustomer } from "@/lib/actions/customers";
+import { createCustomer, importCustomers, generateCustomerTemplate } from "@/lib/actions/customers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, X } from "lucide-react";
+import { Search, Plus, X, Upload, Download } from "lucide-react";
 import Link from "next/link";
 import type { Customer } from "@/lib/db/schema";
 
@@ -31,6 +31,8 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
+  const [importResult, setImportResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const allFiltered = customers.filter((c) => {
     const q = search.toLowerCase();
@@ -69,6 +71,29 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
     });
   };
 
+  const handleDownloadTemplate = () => {
+    startTransition(async () => {
+      const base64 = await generateCustomerTemplate();
+      const link = document.createElement("a");
+      link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
+      link.download = "template_klijenti.xlsx";
+      link.click();
+    });
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    startTransition(async () => {
+      const result = await importCustomers(fd);
+      setImportResult(result);
+      if (fileRef.current) fileRef.current.value = "";
+      router.refresh();
+    });
+  };
+
   const platinum = customers.filter(c => c.loyaltyTier === "Platinum").length;
   const gold = customers.filter(c => c.loyaltyTier === "Gold").length;
 
@@ -79,13 +104,41 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
           <h1 className="text-2xl font-semibold">Klijenti</h1>
           <p className="text-muted-foreground text-sm mt-1">{customers.length} ukupno klijenata</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Novi klijent
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleDownloadTemplate} disabled={isPending}
+            className="flex items-center gap-2 border px-4 py-2 rounded-md text-sm hover:bg-muted transition-colors disabled:opacity-50">
+            <Download className="w-4 h-4" /> Template
+          </button>
+          <label className={`flex items-center gap-2 border px-4 py-2 rounded-md text-sm cursor-pointer hover:bg-muted transition-colors ${isPending ? "opacity-50 pointer-events-none" : ""}`}>
+            <Upload className="w-4 h-4" /> {isPending ? "Uvoz..." : "Uvezi Excel"}
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
+          </label>
+          <button onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
+            <Plus className="w-4 h-4" /> Novi klijent
+          </button>
+        </div>
       </div>
+
+      {/* Modal — rezultat uvoza */}
+      {importResult && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm p-6 space-y-4 text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+              <span className="text-2xl">✓</span>
+            </div>
+            <h2 className="text-lg font-semibold">Uvoz završen</h2>
+            <p className="text-muted-foreground text-sm">
+              Uvezeno <strong>{importResult.inserted}</strong> novih klijenata.
+              {importResult.skipped > 0 && ` Preskočeno ${importResult.skipped} (već postoje).`}
+            </p>
+            <button onClick={() => setImportResult(null)}
+              className="w-full bg-black text-white rounded-md py-2 text-sm hover:bg-black/80">
+              Zatvori
+            </button>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

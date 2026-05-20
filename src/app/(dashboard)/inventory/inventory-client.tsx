@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createMaterial, receiveMaterial, createInventoryItem, receiveInventoryItem, updateMaterial, updateInventoryItem } from "@/lib/actions/inventory";
+import { createMaterial, receiveMaterial, createInventoryItem, receiveInventoryItem, updateMaterial, updateInventoryItem, importMaterials, importInventoryItems } from "@/lib/actions/inventory";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, Plus, X, ArrowDown, Search, Pencil } from "lucide-react";
+import { AlertTriangle, Plus, X, ArrowDown, Search, Pencil, Upload } from "lucide-react";
 import type { Material, InventoryItem } from "@/lib/db/schema";
 
 export function InventoryClient({ materials, inventoryItems }: { materials: Material[]; inventoryItems: InventoryItem[] }) {
@@ -24,6 +24,9 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
   const [itemForm, setItemForm] = useState({ name: "", sku: "", category: "Gotova roba", quantity: "", salePrice: "", costPrice: "" });
   const [receiveQty, setReceiveQty] = useState("");
   const [receiveNote, setReceiveNote] = useState("");
+  const [importResult, setImportResult] = useState<{ inserted: number; total: number } | null>(null);
+  const matFileRef = useRef<HTMLInputElement>(null);
+  const itemFileRef = useRef<HTMLInputElement>(null);
 
   const filteredMaterials = materials.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -160,6 +163,32 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
     });
   };
 
+  const handleImportMaterials = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    startTransition(async () => {
+      const result = await importMaterials(fd);
+      setImportResult(result);
+      if (matFileRef.current) matFileRef.current.value = "";
+      router.refresh();
+    });
+  };
+
+  const handleImportItems = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    startTransition(async () => {
+      const result = await importInventoryItems(fd);
+      setImportResult(result);
+      if (itemFileRef.current) itemFileRef.current.value = "";
+      router.refresh();
+    });
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -167,11 +196,45 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
           <h1 className="text-2xl font-semibold">Zalihe</h1>
           <p className="text-muted-foreground text-sm mt-1">Materijali i gotova roba</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
-          <Plus className="w-4 h-4" /> Novi artikal
-        </button>
+        <div className="flex items-center gap-2">
+          {activeTab === "materials" ? (
+            <>
+              <label className={`flex items-center gap-2 border px-4 py-2 rounded-md text-sm cursor-pointer hover:bg-muted transition-colors ${isPending ? "opacity-50 pointer-events-none" : ""}`}>
+                <Upload className="w-4 h-4" /> {isPending ? "Uvoz..." : "Uvezi Excel"}
+                <input ref={matFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportMaterials} />
+              </label>
+            </>
+          ) : (
+            <label className={`flex items-center gap-2 border px-4 py-2 rounded-md text-sm cursor-pointer hover:bg-muted transition-colors ${isPending ? "opacity-50 pointer-events-none" : ""}`}>
+              <Upload className="w-4 h-4" /> {isPending ? "Uvoz..." : "Uvezi Excel"}
+              <input ref={itemFileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImportItems} />
+            </label>
+          )}
+          <button onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
+            <Plus className="w-4 h-4" /> Novi artikal
+          </button>
+        </div>
       </div>
+
+      {/* Modal — rezultat uvoza */}
+      {importResult && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm p-6 space-y-4 text-center">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+              <span className="text-2xl">✓</span>
+            </div>
+            <h2 className="text-lg font-semibold">Uvoz završen</h2>
+            <p className="text-muted-foreground text-sm">
+              Uvezeno <strong>{importResult.inserted}</strong> od {importResult.total} redova.
+            </p>
+            <button onClick={() => setImportResult(null)}
+              className="w-full bg-black text-white rounded-md py-2 text-sm hover:bg-black/80">
+              Zatvori
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

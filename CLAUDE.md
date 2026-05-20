@@ -327,16 +327,115 @@ movement_type:    receive | reserve | release | sell | adjust
 - Settings — podešavanja firme
 - Admin nalog sa svim pristupom
 
-### ❌ Nije implementirano (prioritet za sljedeće korake)
-1. **Email notifikacije** — kada je nalog gotov, kada klijent dugo nije bio (Resend setup)
-2. **Company management UI** — stranica `/companies` je placeholder; dodavanje Španije kroz UI
-3. **Termini u profilu klijenta** — tab sa terminima direktno na customer profilu
-4. **Bulk import klijenata** — CSV upload za retroaktivni unos starih podataka
-5. **Row Level Security (RLS)** — trenutno filtriranje na app nivou; treba RLS u produkciji
-6. **gocreate.nu integracija** — čeka API pristup od partnera
-7. **Lojalnost napredna** — automatsko dodavanje poena pri kupovini (djelimično), redemption UI
-8. **Fiskalizacija** — e-Fiskalizacija Crna Gora (zakonski zahtjev, istražiti)
-9. **Deploy na Vercel** — projekat nema git repo, nije na webu
+### ❌ Kompletna lista svega što nedostaje za ozbiljnu produkcijsku upotrebu
+
+---
+
+#### 🔴 KRITIČNO — bez ovoga sistem ne smije ići u produkciju
+
+**Sigurnost:**
+- Nema Row Level Security (RLS) u Supabase — filtriranje samo na app nivou, SQL injection ili bug = svi podaci svih firmi su vidljivi
+- Nema rate limitinga na login pokušaje — brute force napad moguć
+- Nema 2FA za admin nalog
+- Nema session timeouta — session traje neograničeno
+- Audit log tabela postoji ali se nigdje ne popunjava — nema traga ko je šta promijenio/obrisao
+
+**Infrastruktura:**
+- **Supabase Free tier pauzira projekt nakon 7 dana neaktivnosti** — aplikacija prestaje raditi vikendom/praznicima. Treba Pro plan ($25/mj) ili migracija na vlastiti PostgreSQL
+- Nema monitoringa — ako app padne u 9:00 ujutro, niko ne zna dok klijent ne zove
+- Nema alertinga (email/SMS ako server ne odgovara)
+- Database backup: Free tier čuva samo 7 dana backupa
+
+**Race conditions (bug u kodu):**
+- `generateOrderNumber` koristi `COUNT(*)` — dva istovremena naloga mogu dobiti isti broj. Treba PostgreSQL SEQUENCE
+- Rezervacija materijala nije atomarna — dvije osobe mogu istovremeno rezervisati isti materijal. Treba `SELECT FOR UPDATE`
+
+---
+
+#### 🟠 JAKO VAŽNO — bez ovoga firma ne može normalno poslovati
+
+**Finansije:**
+- Nema PDV/VAT kalkulacije — svaki izlazni dokument mora imati PDV breakdown ako je firma PDV obveznik u CG
+- Nema formalnog izlaznog računa — postoji samo radni nalog za štampu, ne komercijalni/fiskalni račun
+- Nema avansnog plaćanja (depozita) — firma uzima 50% unaprijed, sistem to ne podržava odvojeno
+- Nema storno/povrata — ako klijent vrati robu ili se nalog pogrešno kreira, nema načina da se stornira
+- Nema dnevnog zaključka blagajne — suma gotovine na kraju dana
+- Nema exporta za računovođu — Excel/CSV sa svim transakcijama za period
+- Nema kalkulacije profita po nalogu (cijena naloga - trošak materijala = marža)
+
+**Zakonski zahtjevi (Crna Gora):**
+- **eFiskalizacija** — zakonska obaveza od 2021. godine. Svaka prodaja mora proći kroz fiskalni sistem. Kazne su visoke. Treba integracija sa Poreskom upravom CG
+- Čuvanje poslovnih dokumenata — zakonski minimum 5-10 godina po CG zakonu
+- GDPR/Zakon o zaštiti podataka — klijenti moraju dati saglasnost za čuvanje ličnih podataka
+
+**Produkcija:**
+- Nema dodjele naloga konkretnom radniku — svi vide sve, niko nije odgovoran za ništa
+- Nema praćenja stvarno utrošenog materijala — sistem rezerviše fiksnih 2m ali krojač može potrošiti 2.3m ili 1.8m
+- Nema QC (quality control) checkpointa — gotov nalog ide klijentu bez provjere
+- Nema prioritizacije (hitni nalozi ne idu automatski na vrh liste)
+- Nema praćenja vremena izrade — koliko dugo traje svaki nalog
+
+---
+
+#### 🟡 VAŽNO — bez ovoga sistem je nepraktičan za svakodnevno korišćenje
+
+**Korisničko iskustvo:**
+- Tabele (nalozi, klijenti, zalihe) se ne skrolaju horizontalno na mobilnom — sadržaj je odrezan
+- Nema paginacije — kada firma ima 1000+ naloga, sve se učitava odjednom (sporo, puno memorije)
+- Nema globalnog searcha — ne možeš pretraživati kroz sve module odjednom
+- Nema bulk operacija — ne možeš označiti 10 naloga i isporučiti ih odjednom
+- Nema keyboard shortcuta za power usere
+- Nema realtime notifikacija unutar app — produkcija ne vidi novi nalog bez refresh-a stranice
+- Tabele nemaju sortiranje po kolonama (klik na "Iznos" ne sortira)
+
+**Zalihe:**
+- Nema godišnjeg popisa zaliha (inventory count) — prebrojavanje fizičke robe i usklađivanje sa sistemom
+- Nema otpisa zaliha (write-off) — oštećena roba, kalo, manjak
+- Nema praćenja gdje je otišao svaki metar materijala (koji nalog je konzumirao koliko)
+
+**CRM:**
+- Nema loga komunikacije sa klijentom — ko je zvao, šta je dogovoreno
+- Nema blackliste loših platnika sa napomenom
+- Nema podsjetnika za rođendane klijenata
+- Nema masovnog slanja emaila/SMS-a grupi klijenata (marketing)
+- Nema GDPR saglasnosti pri unosu klijenta
+
+**Izvještaji:**
+- Nema P&L izvještaja (prihodi - rashodi = profit) — osnova svakog biznisa
+- Nema cash flow izvještaja
+- Nema izvještaja produktivnosti po radniku
+- Nema vrednovanja zaliha (koliko vrijedi cijeli inventar)
+- Nema exporta u Excel ili PDF
+
+---
+
+#### 🔵 POŽELJNO — poboljšava sistem ali nije hitno
+
+- Company management UI — nema UI za dodavanje Španije
+- CSV bulk import klijenata iz Excela
+- Email notifikacije (Resend) — klijent dobija email kad je nalog gotov
+- Loyalty — bodovi se ne dodjeljuju automatski (logika postoji djelimično)
+- Dark mode
+- Offline podrška (PWA) — ako radnja ostane bez interneta
+- Vlastita domena (app.millimeter.me)
+- gocreate.nu integracija — čeka API od partnera
+- Višejezičnost (EN za Španiju)
+- PDF kartica klijenta sa svim merenjima za štampu
+- Statistike po radniku — ko je napravio koliko naloga
+- Konsolidovani izvještaji za sve firme (Owner view)
+
+---
+
+#### 💰 Procjena troškova za produkcijsku verziju
+
+| Stavka | Trošak |
+|---|---|
+| Supabase Pro plan (RLS + backup + no pause) | $25/mj |
+| Vlastita domena | ~€12/god |
+| Resend email (do 3000/dan) | Besplatno |
+| Vercel Hobby (trenutno) | Besplatno |
+| eFiskalizacija integracija | Jednokratno (development) |
+| **Ukupno operativno** | **~$25/mj** |
 
 ---
 
@@ -428,4 +527,62 @@ Radnja kreira nalog → Šalje u produkciju → Produkcija prima (queued) →
 
 ---
 
-*CLAUDE.md ažuriran: 2026-05-15*
+## 14. Klijent — MIN CLOTHING DOO (Millimeter)
+
+### Ko su vlasnici
+- **Nikola Miljković** — 50% vlasnik i izvršni direktor, primarni kontakt za projekat
+- **Miloš Ivanović** — 50% vlasnik i izvršni direktor
+
+### Finansije firme (2025)
+- Prihod: **101.946.000 RSD (~€850.000)**, rast 36,58% YoY
+- Neto dobit: 10.442.000 RSD, marža ~10,24%
+- Zaposlenih: ~10
+
+### Šta Millimeter radi
+Premium krojačnica u Beogradu (Omladinskih brigada 86g). Prave **odijela, košulje i casual odjeću isključivo po mjeri** — nema gotove robe sa police. Svaki komad je jedinstven. Klijenti su poslovni ljudi, premium segment.
+- Košulje: od 12.990 RSD
+- Odijela: od 77.490 do 97.990 RSD
+
+### Munro — odvojena firma za produkciju
+**Munro** je odvojena firma / partner kome se šalju neki nalozi na izradu. Nije javna informacija — interno. Trenutno nije jasno koji sistem Munro koristi. **Treba dodati polje "tok produkcije" na nalog: Millimeter ili Munro.**
+
+### Trenutni način rada (Excel + papir)
+```
+Klijent dolazi → mjere se uzimaju ručno → upisuje se u Excel →
+nalog se štampa/šalje u produkciju (papir/Viber) →
+krojač šije bez digitalnog praćenja statusa →
+gotovo → klijent se zove ručno → naplata
+```
+
+---
+
+## 15. Faza 1 — Šta Nikola želi (prioriteti)
+
+Nikola je eksplicitno tražio:
+
+1. **Dva toka produkcije** — polje na nalogu: `Millimeter` ili `Munro`. Munro nalozi se šalju kao PDF emailom dok se ne sazna koji sistem Munro koristi.
+2. **CSV template za uvoz klijenata** — firma ima 500+ klijenata u Excelu, ne mogu ih ručno upisivati
+3. **CSV uvoz materijala i artikala** — početno stanje zaliha iz njihovog Excela
+4. **Automatski izračun materijala po tipu naloga** — konfigurabilan od vlasnika (normativ: košulja ≈ 1.5m, odijelo ≈ 3.5m, itd.)
+5. **PDF nalog za produkciju** — printabilni dokument koji krojač dobija
+6. **Prilagodba polja naloga** — vidjeti kakav Excel koriste, dodati polja koja nedostaju
+
+### Tabela normativa materijala (konfigurabilan)
+| Tip naloga | Tkanina | Postava | Dugmad |
+|---|---|---|---|
+| Košulja | 1.5m | — | 8 kom |
+| Odijelo 2-piece | 3.5m | 2.0m | 4 kom |
+| Odijelo 3-piece | 4.2m | 2.5m | 6 kom |
+| Pantalone | 1.8m | 0.5m | 1 kom |
+| Casual jakna | 2.0m | 1.0m | 6 kom |
+
+### Pitanja za Nikolu — obavezno saznati
+1. Možeš li poslati primjer Excel naloga koji trenutno koristite?
+2. Koliko metara tkanine ide na košulju / odijelo (pravi normativ iz prakse)?
+3. Koji sistem koristi Munro — web app, email, nešto treće?
+4. U kom formatu je baza klijenata — Excel, neki program?
+5. Ko sve koristi sistem u timu (uloge: vlasnik, radnik u radnji, krojač)?
+
+---
+
+*CLAUDE.md ažuriran: 2026-05-19*

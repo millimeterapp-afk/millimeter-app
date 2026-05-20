@@ -3,8 +3,9 @@
 import { db } from "@/lib/db";
 import { customers, customerMeasurements, orders } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { eq, desc, ilike, or, isNull, and, sql } from "drizzle-orm";
+import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import * as XLSX from "xlsx";
 
 async function getCompanyId() {
   const supabase = await createClient();
@@ -265,4 +266,68 @@ export async function deleteCustomer(id: string) {
     .where(and(eq(customers.id, id), eq(customers.companyId, companyId)));
 
   revalidatePath("/customers");
+}
+
+export async function generateCustomerTemplate(): Promise<string> {
+  const headers = ["Ime", "Prezime", "Telefon", "Email", "Adresa", "Grad", "Broj šablona", "Napomena"];
+  const example = ["Marko", "Petrović", "+38269123456", "marko@email.com", "Bulevar Svetog Petra 5", "Podgorica", "42", "VIP klijent"];
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+  ws["!cols"] = headers.map(() => ({ wch: 20 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Klijenti");
+
+  return XLSX.write(wb, { bookType: "xlsx", type: "base64" }) as string;
+}
+
+export async function importCustomers(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Nisi prijavljen");
+
+  const companyId = await getCompanyId();
+  const file = formData.get("file") as File | null;
+  if (!file) throw new Error("Fajl nije pronađen");
+
+  const buffer = new Uint8Array(await file.arrayBuffer());
+  const wb = XLSX.read(buffer, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+
+  const validRows = rows.filter((r) => r["Ime"] && r["Prezime"] && r["Telefon"]);
+  const phones = validRows.map((r) => String(r["Telefon"]));
+
+  // Provjeri koji telefoni već postoje
+  const existing = phones.length > 0
+    ? await db
+        .select({ phone: customers.phone })
+        .from(customers)
+        .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt), inArray(customers.phone, phones)))
+    : [];
+  const existingPhones = new Set(existing.map((e) => e.phone));
+
+  const toInsert = validRows
+    .filter((r) => !existingPhones.has(String(r["Telefon"])))
+    .map((r) => ({
+      companyId,
+      firstName: String(r["Ime"]),
+      lastName: String(r["Prezime"]),
+      phone: String(r["Telefon"]),
+      email: r["Email"] ? String(r["Email"]) : null,
+      address: r["Adresa"] ? String(r["Adresa"]) : null,
+      city: r["Grad"] ? String(r["Grad"]) : null,
+      templateNumber: r["Broj šablona"] ? String(r["Broj šablona"]) : null,
+      notes: r["Napomena"] ? String(r["Napomena"]) : null,
+      firstVisitDate: new Date().toISOString().split("T")[0],
+      lastVisitDate: new Date().toISOString().split("T")[0],
+      createdBy: user.id,
+    }));
+
+  const CHUNK = 100;
+  for (let i = 0; i < toInsert.length; i += CHUNK) {
+    await db.insert(customers).values(toInsert.slice(i, i + CHUNK));
+  }
+
+  revalidatePath("/customers");
+  return { inserted: toInsert.length, skipped: existingPhones.size };
 }
