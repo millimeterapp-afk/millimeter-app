@@ -22,48 +22,59 @@ Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe +
 
 ---
 
-## 2. Infrastruktura
+## 2. Infrastruktura i nalozi
 
-**Supabase projekat:** `zbmjhmvpavojahhnrkzp`
-**Region:** `eu-central-1` (Frankfurt)
-**Dashboard:** https://supabase.com/dashboard/project/zbmjhmvpavojahhnrkzp
-**GitHub repo:** https://github.com/millimeterapp-afk/millimeter-app (Public)
-**Vercel deploy:** https://millimeter-app.vercel.app (projekt pod millimeterapp-afk nalogom)
+### Supabase (baza podataka)
+- **Projekat:** `zbmjhmvpavojahhnrkzp`
+- **Region:** `eu-central-1` (Frankfurt)
+- **Dashboard:** https://supabase.com/dashboard/project/zbmjhmvpavojahhnrkzp
+- **DB lozinka:** millimete123
+- **Nalog:** millimeterapp@gmail.com
+
+### GitHub (kod)
+- **Repo:** https://github.com/millimeterapp-afk/millimeter-app (Public)
+- **Nalog:** millimeterapp-afk
+- **Email:** millimeterapp@gmail.com
+
+### Vercel (hosting)
+- **Projekt:** https://vercel.com/millimeter-app-s-projects/millimeter-app
+- **Live URL:** https://millimeter-app-lyart.vercel.app
+- **Nalog:** millimeterapp-afk (GitHub login)
+- **Plan:** Hobby (besplatno)
+
+### App admin nalog
+- **Email:** admin@millimeter.me
+- **Lozinka:** admin123
+- **companyId:** e44571bb-e3e9-4a11-8ea4-70cb69b0960d
+- **Role:** owner
 
 ### `.env.local` (nikad commitovati — u .gitignore)
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://zbmjhmvpavojahhnrkzp.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key iz Supabase projekta>
 SUPABASE_SERVICE_ROLE_KEY=<service role key iz Supabase projekta>
-DATABASE_URL=postgresql://postgres.zbmjhmvpavojahhnrkzp:<password>@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.zbmjhmvpavojahhnrkzp:millimete123@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
 ```
 
 **DB konekcija:** PgBouncer transaction pooler (port 6543), `prepare: false`
-**Za migracije** koristiti session pooler (port 5432) ili direktnu konekciju.
+**Za migracije** koristiti session pooler (port 5432) sa `--force`:
+```powershell
+$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:millimete123@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
+```
 
-### Admin nalog
-- **Email:** admin@millimeter.me
-- **Lozinka:** admin123
-- **companyId:** e44571bb-e3e9-4a11-8ea4-70cb69b0960d
-- **Role:** owner
+### ⚠️ KRITIČNO — Supabase Free tier
+Supabase Free tier **pauzira projekat nakon 7 dana neaktivnosti**. App prestaje raditi. Rješenja:
+1. Cron job koji pinguuje bazu svakih 5 dana (nije urađeno)
+2. Upgrade na Pro plan ($25/mj) — preporučeno za produkciju
 
 ---
 
 ## 3. Pokretanje projekta
 
 ```bash
-# Instalacija
 npm install
-
-# Dev server
-npm run dev
-# → http://localhost:3000
-
-# Migracija baze (po promjeni schema.ts) — session pooler port 5432
-$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:<password>@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
-
-# Build provjera
-npx next build
+npm run dev          # → http://localhost:3000
+npx next build       # build provjera
 ```
 
 ---
@@ -141,12 +152,12 @@ movement_type:    receive | reserve | release | sell | adjust
 
 | Tabela | Opis | Ključna polja |
 |---|---|---|
-| `companies` | Firme (CG, Španija...) | name, country, currency |
+| `companies` | Firme | name, country, currency |
 | `users` | Korisnici (id = Supabase Auth UUID) | email, fullName, role, companyId |
 | `customers` | Klijenti firme | firstName, lastName, phone, templateNumber, loyaltyTier, totalSpent |
 | `customer_measurements` | Merenja klijenta (JSONB) | customerId, label, data{vrat,grudi,struk...} |
 | `orders` | Svi nalozi | orderNumber, customerId, status, dueDate, totalAmount, paidAmount, paymentStatus, **productionFlow** |
-| `orders` (custom fields) | Denormalizovano za nalog po mjeri | item, material, templateNumber, collarType, cuffType, fitType, measurementSnapshot, monogramData |
+| `orders` (custom fields) | Denormalizovano za nalog po mjeri | item, material, collarType, cuffType, fitType, measurementSnapshot, monogramData |
 | `material_reservations` | Rezervacije materijala po nalogu | orderId, materialId, quantityReserved, status |
 | `production_tasks` | Produkcijski zadaci | orderId, assignedTo, priority, status, dueDate |
 | `corrections` | Korekcije/izmjene | orderId, customerId, correctionType, description, status |
@@ -200,10 +211,10 @@ movement_type:    receive | reserve | release | sell | adjust
 - `generateInventoryItemBarcode(itemId)` — `MM-INV-XXXXXXXX` format
 - `lookupByBarcode(barcode)` — {type, item} ili null
 - `getInventoryMovements()` — zadnjih 100 kretanja
-- `importMaterials(formData)` — uvozi materijale iz Excel-a (Naziv, Šifra, Barkod, Grupa, JM, Nab. cena sa PDV)
+- `importMaterials(formData)` — uvozi materijale iz Excel-a (Naziv, Šifra, Barkod, Grupa, JM, "Nab. cena sa PDV")
 - `importInventoryItems(formData)` — uvozi gotovu robu iz Excel-a (Naziv, Šifra, Grupa, Cena)
 
-### Ostali actions (neizmijenjeni)
+### Ostali actions
 - `production.ts` — getProductionTasks, updateTaskStatus, addProductionNote
 - `corrections.ts` — getCorrections, createCorrection, updateCorrectionStatus, sendCorrectionToProduction
 - `sales.ts` — getSales, createSale
@@ -219,8 +230,8 @@ movement_type:    receive | reserve | release | sell | adjust
 | Route | Opis | Status |
 |---|---|---|
 | `/login` | Stranica za prijavu | ✅ |
-| `/dashboard` | Glavni dashboard sa KPI karticama, grafikonom, terminima danas | ✅ |
-| `/customers` | Lista klijenata (Template + Uvezi Excel dugmad) | ✅ |
+| `/dashboard` | KPI kartice, grafikon, termini danas | ✅ |
+| `/customers` | Lista klijenata (Template + Uvezi Excel) | ✅ |
 | `/customers/[id]` | Profil klijenta (merenja, nalozi, korekcije, loyalty) | ✅ |
 | `/appointments` | Termini — week view + list view | ✅ |
 | `/orders` | Lista naloga (Munro badge, filteri) | ✅ |
@@ -239,103 +250,83 @@ movement_type:    receive | reserve | release | sell | adjust
 
 ## 8. Faza 1 — Implementirano (Maj 2026)
 
-Svih 5 zadataka iz Faze 1 su implementirani:
-
 ### ✅ Zadatak 1 — Dva toka produkcije
 - `productionFlow` kolona na `orders` tabeli (default: "millimeter")
-- Toggle "Millimeter" / "Munro" u Step 1 (Detalji) wizarda
+- Toggle Millimeter / Munro u Step 1 wizarda
 - Munro badge (ljubičast) na listi naloga
 - Munro nalozi ne idu na produkcijski board
 
 ### ✅ Zadatak 2 — Proširena forma za nalog košulje
-Wizard sada ima 5 koraka (Klijent → Detalji → Mjerenja → Materijal → Potvrda):
+Wizard ima 5 koraka. Forma odgovara tačno njihovom Excel nalogu (`Nalog za Kosulju.xlsx` — provjereno):
 - **Šablon + veličina:** Munro slim (38–45), Naš slim (38–44), Olimp (S–XXXL)
 - **Manžetna (cuffType):** Jednostruka / Dupla / Francuska
-- **Inicijali/monogram:** Checkbox + pozicija (Štej/Manžetna/Prednjica) + boja + font (Pisano/Štampano ćirilica/Pisano latinica/Štampano latinica)
+- **Inicijali/monogram:** pozicija (Štej/Manžetna/Prednjica) + boja + font
 - **13 mjerenja (cm):** vrat, grudi, struk, stomak, kukovi, dužina naprijed/pozadi, aksla, leđa, rukav, biceps, podlaktica, zglob
-- `fitType` se čuva kao "šablon / veličina", monogram u `measurementSnapshot`
 
-### ✅ Zadatak 3 — Uvoz 1.933 materijala
-- Dugme "Uvezi Excel" na Materials tabu u `/inventory`
-- Server akcija `importMaterials(formData)` mapira: Naziv→name, Šifra→code, Barkod→barcode, Grupa→category, JM→unit, "Nab. cena sa PDV"→lastPurchasePrice
-- Batch insert po 100, vraća {inserted, total}
+### ✅ Zadatak 3 — Uvoz materijala
+- 1.933 materijala uvezeno iz `repro materijali.xlsx` — sve u bazi
+- Server akcija `importMaterials(formData)`
 
-### ✅ Zadatak 4 — Uvoz 92 Munro artikla
-- Dugme "Uvezi Excel" na Gotova roba tabu u `/inventory`
-- Server akcija `importInventoryItems(formData)` mapira: Naziv→name, Šifra→sku, Grupa→category, Cena→salePrice
-- Isti pattern kao materijali
+### ✅ Zadatak 4 — Uvoz Munro artikala
+- 92 Munro odijela/prsluka (PC01–PC30) uvezena iz `gotova odela.xlsx` — sve u bazi
+- Server akcija `importInventoryItems(formData)`
 
-### ✅ Zadatak 5 — Template za uvoz klijenata
-- Dugme "Template" → download Excel template sa kolonama: Ime, Prezime, Telefon, Email, Adresa, Grad, Broj šablona, Napomena
-- Dugme "Uvezi Excel" → server akcija `importCustomers(formData)`, preskače duplikate po telefonu
-- Modal sa rezultatom uvoza (uvezeno X, preskočeno Y)
+### ✅ Zadatak 5 — Template + uvoz klijenata
+- Download Excel template, upload popunjenog fajla
+- `importCustomers(formData)` — preskače duplikate po telefonu
 
----
-
-## 9. Deploy
-
-**Status:** Deployed na Vercel
-
-- **GitHub:** `millimeterapp-afk/millimeter-app` (nalog vlasnika Nikole)
-- **Vercel:** Projekt pod `millimeterapp-afk` Vercel nalogom
-- **Live URL:** https://millimeter-app.vercel.app
-
-### Vercel env varijable (obavezno)
-```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-DATABASE_URL  ← koristiti aws-1-eu-central-1 (ne aws-0-)
-```
-
-### Supabase Auth podešavanja
-- Site URL: https://millimeter-app.vercel.app
-- Redirect URLs: https://millimeter-app.vercel.app/auth/callback
+### ✅ Ostale izmjene (Maj 2026)
+- Valuta: `€` → `RSD` u svim fajlovima
+- Lokacija: `Crna Gora / Podgorica` → `Srbija / Beograd` u sidebaru, login stranici, PDF nalogu
 
 ---
 
-## 10. Česte greške i rješenja
+## 9. Stanje podataka u bazi
 
-### `drizzle-kit push` visi na "Pulling schema from database..."
-Koristiti session pooler (port 5432) sa `--force` flagom, ne transaction pooler (port 6543):
-```powershell
-$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:<pw>@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
-```
-
-### `DATABASE_URL is not defined` kod drizzle-kit
-Varijabla mora biti u istom PowerShell pozivu (`;` između, ne novi red).
-
-### `prepare: false` je obavezno
-Supabase PgBouncer transaction pooler ne podržava prepared statements. Podešeno u `src/lib/db/index.ts`.
-
-### EMAXCONN — previše konekcija
-Singleton pattern u `src/lib/db/index.ts` sprječava ovo u dev modu.
+- **Materijali:** 1.933 uvezena (stock = 0, samo katalog)
+- **Gotova roba:** 92 Munro artikla (PC01–PC30, cijene u RSD)
+- **Klijenti:** 0 (Nikola priprema bazu, osoba radi 5 dana na formatiranju)
+- **Nalozi:** 0
+- **Korisnici:** samo admin@millimeter.me
 
 ---
 
-## 11. Konvencije koda
+## 10. Poslovni kontekst
 
-- Sve stranice su `async` server components koji fetchuju podatke i proslijeđuju ih client komponentama
-- Nikad fetching u client komponentama — sve ide kroz server actions
-- Mutacije: `useTransition` + server action + `router.refresh()`
-- Sve tabele imaju `companyId` guard u server actions (via `getCurrentUser()`)
-- Barkod format: `MM-MAT-XXXXXXXX` (materijali), `MM-INV-XXXXXXXX` (inventar)
-- Loyalty tier: Bronze (<500€), Silver (500–1499€), Gold (1500–2999€), Platinum (3000€+)
-- Excel uvoz: batch insert po 100 zapisa, `importMaterials` i `importInventoryItems` ne provjeravaju duplikate, `importCustomers` provjerava duplikate po telefonu
-
----
-
-## 12. Poslovni kontekst
-
-Firma: **MIN CLOTHING DOO (Millimeter)** — premium krojačnica.
-- **Nikola Miljković** — 50% vlasnik, primarni kontakt (millimeterapp@gmail.com)
+### Firma
+**MIN CLOTHING DOO (Millimeter)** — premium krojačnica u Beogradu.
+- **Nikola Miljković** — 50% vlasnik, primarni kontakt
 - **Miloš Ivanović** — 50% vlasnik
 - Prihod 2025: ~€850.000, ~10 zaposlenih
-- Lokacija: Beograd (Omladinskih brigada 86g)
+- Lokacija: Beograd, Srbija (Omladinskih brigada 86g)
 - Košulje: od 12.990 RSD | Odijela: 77.490–97.990 RSD
+- Nikola je prihvatio ponudu i cijenu za Fazu 1 (€500)
 
-### Munro
-Odvojena firma/partner kojoj se šalju neki nalozi. Munro nalozi se vode u sistemu ali ne idu na produkcijski board. Komunikacija trenutno ide emailom/Viberom.
+### Munro — šta je to
+**Munro Tailoring** (munro-tailoring.com) je B2B platforma za custom menswear iz Amsterdama. Imaju 500+ partnerskih radnji u 34 zemlje. Millimeter je jedan od partnera.
+
+**Kako Munro funkcioniše:**
+- Partner (Millimeter) zakazuje appointment sa klijentom
+- Style advisor vodi konsultaciju i uzima mjere → Fit Profile
+- Klijent bira materijal, kroj, detalje (kragnu, manžetne, inicijale...)
+- Odeća se pravi na zahtev u Italiji/Kini/Indiji, stiže za 3–5 nedjelja
+- Klijent dobija pristup **privatnom online storeu** gdje može:
+  - Vidjeti prethodne narudžbine i status
+  - Reorder (isti komad ili sa izmjenama)
+  - Customize novi komad
+
+**Munro u sistemu trenutno:**
+- Nalog može biti označen kao "Munro" tok produkcije
+- Munro nalozi imaju ljubičasti badge, ne idu na produkcijski board
+- **Prava integracija nije urađena** — čeka se URL i kredencijali Nikolinog Munro partner portala
+
+**Šta Nikola želi:**
+Kad kreira Munro nalog u Millimeter app → automatski se popuni i pošalje na Munro platformi (bez ručnog prebacivanja). Tehnički pristup zavisi od toga da li Munro ima API ili samo web formu.
+
+**Šta treba od Nikole:**
+1. URL Munrovog partner portala
+2. Njegovi kredencijali za tu platformu
+3. Primjer jedne narudžbine — šta sve popunjava
 
 ### Tok naloga
 ```
@@ -346,4 +337,91 @@ Draft → Potvrđen → U produkciji → Gotov → Isporučen
 
 ---
 
-*CLAUDE.md ažuriran: 2026-05-20*
+## 11. Otvorena pitanja — čeka Nikolin odgovor
+
+| Pitanje | Zašto je važno |
+|---|---|
+| URL i kredencijali Munro portala | Bez toga ne možemo uraditi integraciju |
+| Kako tačno naručuje od Munra danas? | Email, telefon, portal? |
+| Kolone u Nikolinom Excel klijenata | Da osoba koja formatira zna šta da pripremi |
+| Da li su šabloni tačni? (Munro slim/Naš slim/Olimp) | Možda koriste drugačije nazive |
+| Da li su manžetne tačne? (Jednostruka/Dupla/Francuska) | Možda nudi i druge tipove |
+| Loyalty granice u RSD | Trenutno su pogrešne (postavljene u EUR vrijednostima) |
+| Ko sve koristi sistem? | Treba kreirati korisničke naloge za osoblje |
+| Da li žele PDF nalog za krojača? | Krojač i dalje nema digitalni dokument |
+
+---
+
+## 12. Poznati rizici (Pre-mortem analiza)
+
+### 🐯 Tigeri — blokiraju upotrebu
+1. **Supabase Free tier pauziranje** — app ne radi nakon 7 dana neaktivnosti
+2. **Nema PDF naloga za krojača** — produkcija i dalje ide Viberom
+3. **Nema korisničkih naloga za osoblje** — svi dijele admin nalog
+4. **Loyalty tier granice su u EUR, ne RSD** — pogrešni tierovi za sve klijente
+5. **Nikolin Excel možda ne odgovara template kolonama** — uvoz može propasti
+
+### 📄 Paper Tigeri — nisu hitni
+- Race condition na brojevima naloga (obim je premali da se desi)
+- Nema RLS u Supabase (nema javnog API-ja, rizik je minimalan)
+- Vercel Hobby plan limiti (daleko ispod granice)
+
+### 🐘 Sloni — svi znaju, niko ne govori
+- Nikola možda neće koristiti sistem bez onboardinga (jedan sat uživo ili Loom)
+- Šabloni/mjere/manžetne su naše pretpostavke — nikad potvrđene
+- Munro integracija: Nikola možda očekuje više od badge-a već sad
+
+---
+
+## 13. Faza 2 — Sljedeće (nije urađeno)
+
+| Prioritet | Zadatak | Bilješka |
+|---|---|---|
+| 🔴 1 | Kreirati Nikolin korisnički nalog | Hitno — jedini nalog je admin |
+| 🔴 2 | Riješiti Supabase pauziranje | Cron job ili Pro plan |
+| 🔴 3 | PDF nalog za krojača | Krojač nema šta da dobije u ruke |
+| 🟠 4 | Munro integracija | Čeka URL + kredencijale od Nikole |
+| 🟠 5 | Uvoz klijentske baze | Čeka Nikolin formatiran Excel |
+| 🟠 6 | Korisničke uloge (owner/radnik/krojač) | UI za dodavanje korisnika |
+| 🟡 7 | Loyalty granice u RSD | Pitati Nikolu koje granice želi |
+| 🟡 8 | Onboarding za Nikolu | Loom video ili uživo sesija |
+
+---
+
+## 14. Česte greške i rješenja
+
+### `drizzle-kit push` visi na "Pulling schema from database..."
+Koristiti session pooler (port 5432) sa `--force`, ne transaction pooler (6543):
+```powershell
+$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:millimete123@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
+```
+
+### Fajlovi sa `[id]` u putanji u PowerShell
+Koristiti `-LiteralPath` umjesto normalnog patha (PowerShell tretira `[` kao wildcard):
+```powershell
+Get-Content -LiteralPath "path\[id]\file.tsx"
+Set-Content -LiteralPath "path\[id]\file.tsx" -Value $content
+```
+
+### `prepare: false` je obavezno
+Supabase PgBouncer transaction pooler ne podržava prepared statements. Podešeno u `src/lib/db/index.ts`.
+
+### Vercel DATABASE_URL — obavezno `aws-1-eu-central-1`
+Ne `aws-0-eu-central-1`. Pogrešan region = app ne može da se spoji na bazu.
+
+---
+
+## 15. Konvencije koda
+
+- Sve stranice su `async` server components koji fetchuju podatke i proslijeđuju ih client komponentama
+- Nikad fetching u client komponentama — sve ide kroz server actions
+- Mutacije: `useTransition` + server action + `router.refresh()`
+- Sve tabele imaju `companyId` guard u server actions (via `getCurrentUser()`)
+- Valuta: RSD (ne EUR) — `RSD {iznos}` format
+- Barkod format: `MM-MAT-XXXXXXXX` (materijali), `MM-INV-XXXXXXXX` (inventar)
+- Excel uvoz: batch insert po 100 zapisa
+- `importCustomers` provjerava duplikate po telefonu, `importMaterials` i `importInventoryItems` ne provjeravaju
+
+---
+
+*CLAUDE.md ažuriran: 2026-05-21*
