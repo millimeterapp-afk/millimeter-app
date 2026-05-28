@@ -28,7 +28,7 @@ Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe +
 - **Projekat:** `zbmjhmvpavojahhnrkzp`
 - **Region:** `eu-central-1` (Frankfurt)
 - **Dashboard:** https://supabase.com/dashboard/project/zbmjhmvpavojahhnrkzp
-- **DB lozinka:** millimete123
+- **DB lozinka:** <vidi .env.local / password manager — NE commitovati>
 - **Nalog:** millimeterapp@gmail.com
 
 ### GitHub (kod)
@@ -44,7 +44,7 @@ Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe +
 
 ### App admin nalog
 - **Email:** admin@millimeter.me
-- **Lozinka:** admin123
+- **Lozinka:** <vidi password manager — NE commitovati>
 - **companyId:** e44571bb-e3e9-4a11-8ea4-70cb69b0960d
 - **Role:** owner
 
@@ -53,13 +53,13 @@ Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe +
 NEXT_PUBLIC_SUPABASE_URL=https://zbmjhmvpavojahhnrkzp.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key iz Supabase projekta>
 SUPABASE_SERVICE_ROLE_KEY=<service role key iz Supabase projekta>
-DATABASE_URL=postgresql://postgres.zbmjhmvpavojahhnrkzp:millimete123@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
+DATABASE_URL=postgresql://postgres.zbmjhmvpavojahhnrkzp:<DB_LOZINKA>@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
 ```
 
 **DB konekcija:** PgBouncer transaction pooler (port 6543), `prepare: false`
 **Za migracije** koristiti session pooler (port 5432) sa `--force`:
 ```powershell
-$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:millimete123@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
+$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:<DB_LOZINKA>@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
 ```
 
 ### ⚠️ KRITIČNO — Supabase Free tier
@@ -315,7 +315,7 @@ Wizard ima 5 koraka. Forma odgovara tačno njihovom Excel nalogu (`Nalog za Kosu
 | Millimeter (invoice) | 2855 | Faktura, kreditna linija ~8.860€, na 70% |
 | Millimeter Montenegro (CC) | 3100 | Crnogorska radnja |
 
-Login: username=Millimeter, password=Nikola41023!
+Login: username=Millimeter, password=<GoCreate lozinka — vidi password manager, NE commitovati>
 
 #### GoCreate REST API (api.gocreate.nu)
 Kompletna lista endpointa — ništa više ne postoji:
@@ -441,7 +441,7 @@ Draft → Potvrđen → U produkciji → Gotov → Isporučen
 ### `drizzle-kit push` visi na "Pulling schema from database..."
 Koristiti session pooler (port 5432) sa `--force`, ne transaction pooler (6543):
 ```powershell
-$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:millimete123@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
+$env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:<DB_LOZINKA>@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
 ```
 
 ### Fajlovi sa `[id]` u putanji u PowerShell
