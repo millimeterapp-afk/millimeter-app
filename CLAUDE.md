@@ -302,31 +302,79 @@ Wizard ima 5 koraka. Forma odgovara tačno njihovom Excel nalogu (`Nalog za Kosu
 - Košulje: od 12.990 RSD | Odijela: 77.490–97.990 RSD
 - Nikola je prihvatio ponudu i cijenu za Fazu 1 (€500)
 
-### Munro — šta je to
+### Munro / GoCreate — kompletna analiza (Maj 2026)
+
 **Munro Tailoring** (munro-tailoring.com) je B2B platforma za custom menswear iz Amsterdama. Imaju 500+ partnerskih radnji u 34 zemlje. Millimeter je jedan od partnera.
 
-**Kako Munro funkcioniše:**
-- Partner (Millimeter) zakazuje appointment sa klijentom
-- Style advisor vodi konsultaciju i uzima mjere → Fit Profile
-- Klijent bira materijal, kroj, detalje (kragnu, manžetne, inicijale...)
-- Odeća se pravi na zahtev u Italiji/Kini/Indiji, stiže za 3–5 nedjelja
-- Klijent dobija pristup **privatnom online storeu** gdje može:
-  - Vidjeti prethodne narudžbine i status
-  - Reorder (isti komad ili sa izmjenama)
-  - Customize novi komad
+**GoCreate** (gocreate.nu) je softverska platforma koju Munro koristi za upravljanje narudžbinama. Nikola se loguje na gocreate.nu da kreira naloge.
 
-**Munro u sistemu trenutno:**
-- Nalog može biti označen kao "Munro" tok produkcije
-- Munro nalozi imaju ljubičasti badge, ne idu na produkcijski board
-- **Prava integracija nije urađena** — čeka se URL i kredencijali Nikolinog Munro partner portala
+#### GoCreate nalozi (Millimeter ima 3)
+| Shop | ID | Tip |
+|---|---|---|
+| Millimeter (CC) | 2293 | Kartično plaćanje |
+| Millimeter (invoice) | 2855 | Faktura, kreditna linija ~8.860€, na 70% |
+| Millimeter Montenegro (CC) | 3100 | Crnogorska radnja |
 
-**Šta Nikola želi:**
-Kad kreira Munro nalog u Millimeter app → automatski se popuni i pošalje na Munro platformi (bez ručnog prebacivanja). Tehnički pristup zavisi od toga da li Munro ima API ili samo web formu.
+Login: username=Millimeter, password=Nikola41023!
 
-**Šta treba od Nikole:**
-1. URL Munrovog partner portala
-2. Njegovi kredencijali za tu platformu
-3. Primjer jedne narudžbine — šta sve popunjava
+#### GoCreate REST API (api.gocreate.nu)
+Kompletna lista endpointa — ništa više ne postoji:
+
+**Order (samo čitanje + status update, NEMA kreiranja):**
+- `POST /Order/ByCustomerId` — svi nalozi klijenta
+- `POST /Order/ByDate` / `ByOrderdate` — nalozi po datumu
+- `POST /Order/ByOrderNumber` — detalji naloga (mjere, tkanina, dizajn opcije, cijene, branding)
+- `POST /Order/OrderDeliveryInfo` — datum isporuke
+- `POST /Order/OrderDeliveryInfoByStatus` — nalozi po statusu
+- `POST /Order/OrderPricingInfo` — cijene
+- `POST /Order/UpdateStatus` — promijeni status (Processed/On hold/Delivered/Cancelled/Deposit paid)
+
+**Customer:**
+- `POST /Customer/Add` — dodaj klijenta, vraća GoCreate CustomerID
+- `POST /Customer/Search` — pretraži po imenu/telefonu/emailu
+- `POST /Customer/ByCustomerId` / `ByDate` / `ByDateRange`
+
+**Fabric/Lining:**
+- `POST /Fabric/FetchFabricStockInfo` / `Post` — stanje tkanina
+- `POST /Lining/Post` — postave
+
+**Autentikacija:** Svaki request traži `UserName` + `Password` + `AuthenticationToken` (non-empty, required).
+`AuthenticationToken` je poseban API ključ koji GoCreate daje partnerima — Nikola ga mora zatražiti od GoCreate supporta.
+
+**Poruka poslana Nikoli:**
+> "I need to activate the Shop API and get an AuthenticationToken for my shop Millimeter (CC), shop ID 2293."
+
+**Status:** Čeka se odgovor od GoCreate supporta.
+
+#### Tok kreiranja naloga u GoCreate (zašto nema API)
+Kreiranje naloga nije jednostavna forma — prolazi kroz FitProfile sistem:
+1. Izaberi/kreiraj klijenta
+2. Otvori FitProfile tab → odaberi tip odjevnog predmeta (Shirt=8, Suit=1...)
+3. Wizard: unesi mjere i fitting preferencije za taj tip
+4. Odaberi tkaninu iz GoCreate kataloga (ima šifru npr. K10030)
+5. Odaberi design opcije (GoCreate interni ID-ovi za kragnju, manžetnu itd.)
+6. Nalog se kreira
+
+Zbog ove kompleksnosti, automatizacija kreiranja naloga zahtijeva rebuild GoCreate klijenta unutar Millimeter app.
+
+#### Plan integracije (realan)
+
+| Šta | Moguće | Prioritet |
+|---|---|---|
+| Sync klijenata Millimeter → GoCreate via API | ✅ | #1, čeka token |
+| Praćenje statusa Munro naloga u Millimeter app | ✅ | #2, čeka token |
+| Nikola ručno kreira nalog u GoCreate | ✅ (status quo) | Ostaje |
+| Automatizacija kreiranja naloga | ❌ previše kompleksno | Ne radimo |
+
+**SSID polje** pri Customer/Add: koristiti za čuvanje Millimeter customer ID-a → laka bidirekciona sinhronizacija.
+**goCreateCustomerId** kolona treba biti dodata na `customers` tabelu u našoj bazi.
+
+#### Realni format naloga
+Order number format: `MILL.110.RS.XXXXXXX`
+Account manager kod GoCreate-a: Marianne Cassou
+
+#### GoCreate moduli (sve što postoji)
+Orders, ReadyMade, FitProfile, Online Fitting Tool, Delivery Calendar, Fabric Stock (Suits/Shirts/Overcoats/Shoes/Ties/Pants/Knitwear/Vests/Lining/Label), RM Collection, Reports, Invoices, Payment transactions, Shop Settings
 
 ### Tok naloga
 ```
