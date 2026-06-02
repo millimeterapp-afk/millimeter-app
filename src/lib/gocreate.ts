@@ -1,4 +1,5 @@
 const BASE_URL = "https://api.gocreate.nu";
+const SHOP_ID = 2293; // Millimeter CC
 
 function getAuth() {
   return {
@@ -16,11 +17,17 @@ async function post<T>(endpoint: string, body: Record<string, unknown>): Promise
     next: { revalidate: 0 },
   });
 
+  const text = await res.text();
+
   if (!res.ok) {
-    throw new Error(`GoCreate ${endpoint} → ${res.status} ${res.statusText}`);
+    throw new Error(`GoCreate ${endpoint} → HTTP ${res.status}: ${text}`);
   }
 
-  return res.json() as Promise<T>;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`GoCreate ${endpoint} → invalid JSON: ${text}`);
+  }
 }
 
 // ─── Customer ─────────────────────────────────────────────
@@ -29,8 +36,10 @@ export interface GoCreateAddCustomerResult {
   CustomerId?: number;
   Id?: number;
   CustomerID?: number;
+  CustomerCode?: string;
   Success?: boolean;
   Error?: string;
+  Message?: string;
 }
 
 export interface GoCreateOrderStatus {
@@ -48,10 +57,11 @@ export async function addGoCreateCustomer(customer: {
   lastName: string;
   phone?: string | null;
   email?: string | null;
-  ssid: string; // naš interni UUID — laka bidirekciona sinhronizacija
+  ssid: string;
 }): Promise<number | null> {
   try {
     const result = await post<GoCreateAddCustomerResult>("/Customer/Add", {
+      ShopId: SHOP_ID,
       FirstName: customer.firstName,
       LastName: customer.lastName,
       Phone: customer.phone ?? "",
@@ -59,11 +69,14 @@ export async function addGoCreateCustomer(customer: {
       SSID: customer.ssid,
     });
 
+    console.log("[GoCreate] addCustomer response:", JSON.stringify(result));
+
     const id = result.CustomerId ?? result.Id ?? result.CustomerID ?? null;
     return id ? Number(id) : null;
   } catch (err) {
     console.error("[GoCreate] addCustomer failed:", err);
-    return null;
+    // Propagiraj grešku dalje da je UI može prikazati
+    throw err;
   }
 }
 
@@ -72,7 +85,7 @@ export async function searchGoCreateCustomer(ssid: string): Promise<number | nul
   try {
     const result = await post<{ Customers?: Array<{ CustomerId?: number; SSID?: string }> }>(
       "/Customer/Search",
-      { SSID: ssid }
+      { ShopId: SHOP_ID, SSID: ssid }
     );
 
     const match = result.Customers?.find((c) => c.SSID === ssid);
@@ -87,7 +100,7 @@ export async function getGoCreateOrders(goCreateCustomerId: number): Promise<GoC
   try {
     const result = await post<GoCreateOrderStatus[] | { Orders?: GoCreateOrderStatus[] }>(
       "/Order/ByCustomerId",
-      { CustomerId: goCreateCustomerId }
+      { ShopId: SHOP_ID, CustomerId: goCreateCustomerId }
     );
 
     if (Array.isArray(result)) return result;

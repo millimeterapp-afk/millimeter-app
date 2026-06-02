@@ -352,7 +352,7 @@ export async function syncCustomerToGoCreate(customerId: string): Promise<string
   // Proveri da li postoji u GoCreate po SSID-u (naš UUID)
   let goCreateId = await searchGoCreateCustomer(customerId);
 
-  // Ako ne postoji — kreiraj ga
+  // Ako ne postoji — kreiraj ga (greška se propagira do UI-ja)
   if (!goCreateId) {
     const numericId = await addGoCreateCustomer({
       firstName: customer.firstName,
@@ -364,7 +364,7 @@ export async function syncCustomerToGoCreate(customerId: string): Promise<string
     goCreateId = numericId;
   }
 
-  if (!goCreateId) return null;
+  if (!goCreateId) throw new Error("GoCreate nije vratio ID klijenta. Proverite Vercel Logs za detalje.");
 
   const goCreateCustomerId = String(goCreateId);
 
