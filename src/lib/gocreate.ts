@@ -1,5 +1,5 @@
 const BASE_URL = "https://api.gocreate.nu";
-const SHOP_ID = 2293; // Millimeter CC — koristiti samo za Search i Orders, NE za Customer/Add
+const SHOP_ID = 2293; // Millimeter CC — koristiti samo za Search, NE za Customer/Add
 
 function getAuth() {
   return {
@@ -35,14 +35,14 @@ async function post<T>(endpoint: string, body: Record<string, unknown>): Promise
 interface GoCreateAddResult {
   FirstName?: string;
   LastName?: string;
-  CustomerID?: number;       // ID pri uspešnom kreiranju (> 0)
+  CustomerID?: number;
   IsValidResult?: boolean;
   ErrorCode?: string[];
   ErrorMessage?: string[];
 }
 
 interface GoCreateCustomerInfo {
-  Id?: number;               // ID u Search odgovoru
+  Id?: number;
   FirstName?: string;
   LastName?: string;
   Email?: string;
@@ -53,22 +53,28 @@ interface GoCreateSearchResult {
   CustomerInfo?: GoCreateCustomerInfo[];
 }
 
-export interface GoCreateOrderStatus {
-  OrderId?: number;
-  OrderNumber?: string;
-  Status?: string;
-  StatusText?: string;
-  DeliveryDate?: string;
-  Description?: string;
+export interface GoCreateOrder {
+  OrderNumber: string;
+  OrderType: string;
+  Status: string;
+  Fabric: string;
+  Lining: string | null;
+  DeliveryDate: string;
+  UpdatedDeliveryDate: string;
+  CustomerName: string;
+  PPrice: string;
+  CreatedDate: string;
+  UrgentOrder: string;
+  ShopOrderComment: string;
+}
+
+interface GoCreateOrdersResponse {
+  Orders?: GoCreateOrder[];
+  IsValidResult?: boolean;
 }
 
 // ─── Customer ─────────────────────────────────────────────
 
-/**
- * Dodaje klijenta u GoCreate.
- * - BEZ ShopId — sa ShopId API vraća CustomerID:0 i kvari odgovor
- * - Vraća numerički ID ili null ako ne uspe
- */
 export async function addGoCreateCustomer(customer: {
   firstName: string;
   lastName: string;
@@ -92,10 +98,6 @@ export async function addGoCreateCustomer(customer: {
   return { id, alreadyExists };
 }
 
-/**
- * Pretraži klijenta u GoCreate po imenu.
- * Koristi se kad Customer/Add vrati ALREADY_EXISTS.
- */
 export async function searchGoCreateCustomerByName(
   firstName: string,
   lastName: string
@@ -106,11 +108,8 @@ export async function searchGoCreateCustomerByName(
       SearchText: `${firstName} ${lastName}`,
     });
 
-    console.log("[GoCreate] search response (first 3):", JSON.stringify(result.CustomerInfo?.slice(0, 3)));
-
     if (!result.CustomerInfo?.length) return null;
 
-    // Nađi tačan match po imenu (case-insensitive)
     const match = result.CustomerInfo.find(
       (c) =>
         c.FirstName?.toLowerCase().trim() === firstName.toLowerCase().trim() &&
@@ -124,17 +123,13 @@ export async function searchGoCreateCustomerByName(
   }
 }
 
-/** Dohvata naloge klijenta iz GoCreate (za prikaz statusa Munro naloga). */
-export async function getGoCreateOrders(goCreateCustomerId: number): Promise<GoCreateOrderStatus[]> {
+/** Dohvata naloge klijenta iz GoCreate. Odgovor: { Orders: [...], IsValidResult: true } */
+export async function getGoCreateOrders(goCreateCustomerId: number): Promise<GoCreateOrder[]> {
   try {
-    const result = await post<GoCreateOrderStatus[] | { Orders?: GoCreateOrderStatus[] }>(
-      "/Order/ByCustomerId",
-      { ShopId: SHOP_ID, CustomerId: goCreateCustomerId }
-    );
-
-    if (Array.isArray(result)) return result;
-    if (result && "Orders" in result && Array.isArray(result.Orders)) return result.Orders;
-    return [];
+    const result = await post<GoCreateOrdersResponse>("/Order/ByCustomerId", {
+      CustomerID: goCreateCustomerId,
+    });
+    return result.Orders ?? [];
   } catch (err) {
     console.error("[GoCreate] getOrders failed:", err);
     return [];

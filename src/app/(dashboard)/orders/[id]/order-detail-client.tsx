@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, User, Printer, Check, CreditCard, AlertCircle, X, Wrench, Pencil, ExternalLink, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import type { Order, Customer, CustomerMeasurement, Correction } from "@/lib/db/schema";
+import type { GoCreateOrder } from "@/lib/gocreate";
 
 type OrderWithDetails = Order & {
   customer: (Customer & { measurements: CustomerMeasurement[] }) | null;
@@ -47,7 +48,17 @@ const nextActionLabels: Record<string, string> = {
   ready: "Isporuči klijentu →",
 };
 
-export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
+const GC_STATUS_COLORS: Record<string, string> = {
+  "Shipped to customer": "bg-green-100 text-green-800",
+  "Out for delivery": "bg-blue-100 text-blue-800",
+  "In workshop": "bg-yellow-100 text-yellow-800",
+  "Cancelled": "bg-red-100 text-red-700",
+  "On hold": "bg-orange-100 text-orange-800",
+  "Processed": "bg-purple-100 text-purple-800",
+  "Delivered": "bg-gray-100 text-gray-600",
+};
+
+export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDetails; gcOrders?: GoCreateOrder[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showPayment, setShowPayment] = useState(false);
@@ -684,6 +695,11 @@ ${order.notes ? `
             <CardTitle className="text-xs font-medium text-purple-700 uppercase tracking-wide flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
               Munro / GoCreate
+              {gcOrders.length > 0 && (
+                <span className="text-xs bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded-full font-bold">
+                  {gcOrders.length}
+                </span>
+              )}
             </CardTitle>
             {customer?.goCreateCustomerId && (
               <a
@@ -697,39 +713,15 @@ ${order.notes ? `
               </a>
             )}
           </CardHeader>
-          <CardContent>
-            {customer?.goCreateCustomerId ? (
-              <div className="flex items-center gap-6 flex-wrap">
-                <div>
-                  <p className="text-xs text-muted-foreground">GoCreate ID klijenta</p>
-                  <p className="text-sm font-mono font-medium">{customer.goCreateCustomerId}</p>
-                </div>
-                {customer.goCreateSyncedAt && (
-                  <div>
-                    <p className="text-xs text-muted-foreground">Sinhronizovano</p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(customer.goCreateSyncedAt).toLocaleDateString("sr-RS")}
-                    </p>
-                  </div>
-                )}
-                <div className="ml-auto">
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
-                    Sinhronizovano
-                  </span>
-                </div>
-              </div>
-            ) : (
+          <CardContent className="space-y-3">
+            {!customer?.goCreateCustomerId ? (
               <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                   <p className="text-sm font-medium">Klijent nije sinhronizovan sa GoCreate</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Klikni dugme da dodaš klijenta u GoCreate i povežeš nalog
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Klikni dugme da dodaš klijenta u GoCreate</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  {gcSyncError && (
-                    <p className="text-xs text-red-600">{gcSyncError}</p>
-                  )}
+                  {gcSyncError && <p className="text-xs text-red-600">{gcSyncError}</p>}
                   {gcSyncDone ? (
                     <span className="text-xs text-green-700 font-medium flex items-center gap-1">
                       <Check className="w-3.5 h-3.5" /> Sync pokrenuto
@@ -742,12 +734,8 @@ ${order.notes ? `
                         setGcSyncError("");
                         startTransition(async () => {
                           const result = await syncCustomerToGoCreate(customer.id);
-                          if (result.ok) {
-                            setGcSyncDone(true);
-                            router.refresh();
-                          } else {
-                            setGcSyncError(result.error);
-                          }
+                          if (result.ok) { setGcSyncDone(true); router.refresh(); }
+                          else setGcSyncError(result.error);
                         });
                       }}
                       className="flex items-center gap-1.5 text-xs border border-purple-300 bg-white text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-50 disabled:opacity-50 transition-colors"
@@ -757,6 +745,32 @@ ${order.notes ? `
                     </button>
                   )}
                 </div>
+              </div>
+            ) : gcOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nema GoCreate naloga za ovog klijenta. Kreira se ručno na gocreate.nu.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {gcOrders.map((o) => (
+                  <div key={o.OrderNumber} className="bg-white border border-purple-100 rounded-lg p-3 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-semibold text-purple-800">{o.OrderNumber}</span>
+                        <span className="text-xs text-muted-foreground">{o.OrderType}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{o.Fabric}</p>
+                      {o.DeliveryDate && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Isporuka: {o.UpdatedDeliveryDate || o.DeliveryDate}
+                        </p>
+                      )}
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${GC_STATUS_COLORS[o.Status] ?? "bg-gray-100 text-gray-600"}`}>
+                      {o.Status}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
