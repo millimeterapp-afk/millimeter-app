@@ -27,29 +27,44 @@ export async function GET(req: Request) {
     ShopOrderNumber: "TEST-001",
   };
 
-  // Minimalni ProductData sa svim required poljima (prazni objekti)
-  const pdMinimal = {
+  const pdBase = {
     StyleOrderNumber: "TEST-STYLE-001",
-    BrandingOptionData: {},
     FitAndTryOnData: {
       FitProfileName: "Slim Fit",
-      FitToolData: {},
+      FitToolData: {
+        Neck: 39, Chest: 100, Waist: 90, Stomach: 92,
+        Hips: 96, FrontLength: 72, BackLength: 74,
+        Shoulder: 44, Back: 42, Sleeve: 62,
+        Bicep: 34, Forearm: 26, Wrist: 17,
+      },
     },
   };
 
-  // T9: Minimalni ProductData — da vidimo koji sub-fieldi su required
+  // T12: BrandingOptionData kao prazan niz
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...auth, input: {},
-        OrderData: { ...orderBase, ProductData: [pdMinimal] },
+        OrderData: { ...orderBase, ProductData: [{ ...pdBase, BrandingOptionData: [] }] },
       }),
     });
-    results["t9_pd_minimal"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t9"] = String(e); }
+    results["t12_branding_empty_list"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t12"] = String(e); }
 
-  // T10: FitToolData sa mjerama košulje
+  // T13: BrandingOptionData kao niz sa jednim praznim objektom
+  try {
+    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...auth, input: {},
+        OrderData: { ...orderBase, ProductData: [{ ...pdBase, BrandingOptionData: [{}] }] },
+      }),
+    });
+    results["t13_branding_one_empty"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t13"] = String(e); }
+
+  // T14: BrandingOptionData sa monogram poljima kao niz
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -58,45 +73,19 @@ export async function GET(req: Request) {
         OrderData: {
           ...orderBase,
           ProductData: [{
-            ...pdMinimal,
-            FitAndTryOnData: {
-              FitProfileName: "Slim Fit",
-              FitToolData: {
-                Neck: 39, Chest: 100, Waist: 90, Stomach: 92,
-                Hips: 96, FrontLength: 72, BackLength: 74,
-                Shoulder: 44, Back: 42, Sleeve: 62,
-                Bicep: 34, Forearm: 26, Wrist: 17,
-              },
-            },
-          }],
-        },
-      }),
-    });
-    results["t10_pd_measurements"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t10"] = String(e); }
-
-  // T11: BrandingOptionData sa mogućim poljima
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...auth, input: {},
-        OrderData: {
-          ...orderBase,
-          ProductData: [{
-            ...pdMinimal,
-            BrandingOptionData: {
+            ...pdBase,
+            BrandingOptionData: [{
               Monogram: "",
               MonogramPosition: "",
               MonogramColor: "",
               MonogramFont: "",
-            },
+            }],
           }],
         },
       }),
     });
-    results["t11_branding_fields"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t11"] = String(e); }
+    results["t14_branding_monogram"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t14"] = String(e); }
 
   return NextResponse.json(results);
 }
