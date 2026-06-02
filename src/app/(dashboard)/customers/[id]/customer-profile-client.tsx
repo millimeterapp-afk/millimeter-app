@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { updateCustomer, saveMeasurements, addHistoricalPurchase } from "@/lib/actions/customers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Phone, Mail, MapPin, Ruler, Star, ClipboardList, Wrench, Check, Pencil, Plus, History, CalendarDays, Clock } from "lucide-react";
+import { ArrowLeft, Phone, Mail, MapPin, Ruler, Star, ClipboardList, Wrench, Check, Pencil, Plus, History, CalendarDays, Clock, Package } from "lucide-react";
 import Link from "next/link";
 import type { Customer, CustomerMeasurement, Order, Correction, Appointment } from "@/lib/db/schema";
+import type { GoCreateOrder } from "@/lib/gocreate";
 
 type CustomerWithDetails = Customer & {
   measurements: CustomerMeasurement[];
@@ -79,7 +80,20 @@ const correctionStatusColors: Record<string, string> = {
   not_resolved: "bg-red-100 text-red-700",
 };
 
-export function CustomerProfileClient({ customer, appointments }: { customer: CustomerWithDetails; appointments: Appointment[] }) {
+const munroStatusColors: Record<string, string> = {
+  "Processed": "bg-blue-100 text-blue-800",
+  "On hold": "bg-yellow-100 text-yellow-800",
+  "Shipped to customer": "bg-green-100 text-green-800",
+  "Delivered": "bg-gray-100 text-gray-500",
+  "Cancelled": "bg-red-100 text-red-700",
+  "Deposit paid": "bg-purple-100 text-purple-800",
+};
+
+export function CustomerProfileClient({ customer, appointments, munroOrders }: {
+  customer: CustomerWithDetails;
+  appointments: Appointment[];
+  munroOrders: GoCreateOrder[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editMode, setEditMode] = useState(false);
@@ -492,6 +506,56 @@ export function CustomerProfileClient({ customer, appointments }: { customer: Cu
                     </span>
                   </div>
                 ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Munro / GoCreate nalozi */}
+          {munroOrders.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Package className="w-4 h-4" />
+                  Munro nalozi ({munroOrders.length})
+                  <span className="ml-auto text-xs font-normal normal-case text-muted-foreground">via GoCreate</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-muted/30">
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Nalog</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Tip</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Tkanina</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Status</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Isporuka</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {munroOrders.map((order) => (
+                      <tr key={order.OrderNumber} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3">
+                          <span className="text-xs font-mono text-muted-foreground">{order.OrderNumber}</span>
+                          {order.UrgentOrder === "YES" && (
+                            <span className="ml-1 text-xs text-red-600 font-medium">HITNO</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm">{order.OrderType}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground max-w-[160px] truncate" title={order.Fabric}>
+                          {order.Fabric}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${munroStatusColors[order.Status] ?? "bg-gray-100 text-gray-600"}`}>
+                            {order.Status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {order.UpdatedDeliveryDate || order.DeliveryDate || "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </CardContent>
             </Card>
           )}
