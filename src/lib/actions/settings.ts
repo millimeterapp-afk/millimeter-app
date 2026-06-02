@@ -2,8 +2,8 @@
 
 import { db } from "@/lib/db";
 import { users, companies } from "@/lib/db/schema";
-import { createClient } from "@/lib/supabase/server";
-import { eq } from "drizzle-orm";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 async function getCurrentUser() {
@@ -67,18 +67,16 @@ export async function inviteUser(data: {
   role: "owner" | "store_manager" | "store_employee" | "production_employee" | "accountant";
 }) {
   const currentUser = await getCurrentUser();
+  if (currentUser.role !== "owner") throw new Error("Samo vlasnik može dodavati korisnike");
 
-  // Kreira korisnika u Supabase Auth i šalje pozivnicu
-  const supabase = await createClient();
-  const adminSupabase = (await import("@/lib/supabase/server")).createAdminClient();
+  const adminSupabase = await createAdminClient();
 
-  const { data: authUser, error } = await (await adminSupabase).auth.admin.inviteUserByEmail(data.email, {
+  const { data: authUser, error } = await adminSupabase.auth.admin.inviteUserByEmail(data.email, {
     data: { full_name: data.fullName },
   });
 
   if (error) throw new Error(error.message);
 
-  // Dodaj u users tabelu
   await db.insert(users).values({
     id: authUser.user.id,
     email: data.email,
@@ -87,6 +85,69 @@ export async function inviteUser(data: {
     companyId: currentUser.companyId,
     isActive: true,
   });
+
+  revalidatePath("/settings");
+}
+
+export async function createUserWithPassword(data: {
+  email: string;
+  fullName: string;
+  role: "owner" | "store_manager" | "store_employee" | "production_employee" | "accountant";
+  password: string;
+}) {
+  const currentUser = await getCurrentUser();
+  if (currentUser.role !== "owner") throw new Error("Samo vlasnik može dodavati korisnike");
+
+  const adminSupabase = await createAdminClient();
+
+  const { data: authUser, error } = await adminSupabase.auth.admin.createUser({
+    email: data.email,
+    password: data.password,
+    email_confirm: true,
+    user_metadata: { full_name: data.fullName },
+  });
+
+  if (error) throw new Error(error.message);
+
+  await db.insert(users).values({
+    id: authUser.user.id,
+    email: data.email,
+    fullName: data.fullName,
+    role: data.role,
+    companyId: currentUser.companyId,
+    isActive: true,
+  });
+
+  revalidatePath("/settings");
+}
+
+export async function updateUserRole(
+  userId: string,
+  role: "owner" | "store_manager" | "store_employee" | "production_employee" | "accountant"
+) {
+  const currentUser = await getCurrentUser();
+  if (currentUser.role !== "owner") throw new Error("Samo vlasnik može mijenjati uloge");
+
+  await db
+    .update(users)
+    .set({ role })
+    .where(and(eq(users.id, userId), eq(users.companyId, currentUser.companyId!)));
+
+  revalidatePath("/settings");
+}
+
+export async function toggleUserActive(userId: string) {
+  const currentUser = await getCurrentUser();
+  if (currentUser.role !== "owner") throw new Error("Samo vlasnik može deaktivirati korisnike");
+  if (userId === currentUser.id) throw new Error("Ne možeš deaktivirati vlastiti nalog");
+
+  const target = await db.query.users.findFirst({ where: (u, { eq }) => eq(u.id, userId) });
+  if (!target) throw new Error("Korisnik nije pronađen");
+
+  await db
+    .update(users)
+    .set({ isActive: !target.isActive })
+    .where(and(eq(users.id, userId), eq(users.companyId, currentUser.companyId!)));
 
   revalidatePath("/settings");
 }

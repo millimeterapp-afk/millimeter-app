@@ -2,13 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateCompany, inviteUser } from "@/lib/actions/settings";
+import { updateCompany, createUserWithPassword, updateUserRole, toggleUserActive } from "@/lib/actions/settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus, X, ShieldCheck, UserX, UserCheck } from "lucide-react";
 import type { User, Company } from "@/lib/db/schema";
 
-const roleColors: Record<string, string> = {
+const ROLE_LABELS: Record<string, string> = {
+  owner: "Vlasnik",
+  store_manager: "Menadžer radnje",
+  store_employee: "Radnik radnje",
+  production_employee: "Produkcija / Krojač",
+  accountant: "Računovodja",
+};
+
+const ROLE_COLORS: Record<string, string> = {
   owner: "bg-purple-100 text-purple-800",
   store_manager: "bg-blue-100 text-blue-800",
   store_employee: "bg-green-100 text-green-800",
@@ -16,23 +24,37 @@ const roleColors: Record<string, string> = {
   accountant: "bg-gray-100 text-gray-700",
 };
 
-const roleLabels: Record<string, string> = {
-  owner: "Owner",
-  store_manager: "Store Manager",
-  store_employee: "Store Employee",
-  production_employee: "Production Employee",
-  accountant: "Accountant",
+const ROLE_DESC: Record<string, string> = {
+  owner: "Pun pristup — nalozi, klijenti, izvještaji, podešavanja",
+  store_manager: "Nalozi, klijenti, izvještaji — bez podešavanja",
+  store_employee: "Nalozi i klijenti — bez izvještaja",
+  production_employee: "Samo produkcijski board i nalozi",
+  accountant: "Samo izvještaji i finansije",
 };
 
 const tabs = ["Korisnici", "Kompanija", "Integracije"];
 
-export function SettingsClient({ users, company }: { users: User[]; company: Company | null }) {
+type Role = "owner" | "store_manager" | "store_employee" | "production_employee" | "accountant";
+
+export function SettingsClient({
+  users,
+  company,
+  currentUserId,
+  currentUserRole,
+}: {
+  users: User[];
+  company: Company | null;
+  currentUserId: string;
+  currentUserRole: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState("Korisnici");
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ fullName: "", email: "", role: "store_employee" });
-  const [inviteError, setInviteError] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ fullName: "", email: "", role: "store_employee", password: "" });
+  const [addError, setAddError] = useState("");
+  const [addSuccess, setAddSuccess] = useState("");
+  const [editingRole, setEditingRole] = useState<string | null>(null);
   const [companyForm, setCompanyForm] = useState({
     name: company?.name ?? "",
     address: company?.address ?? "",
@@ -40,21 +62,50 @@ export function SettingsClient({ users, company }: { users: User[]; company: Com
   });
   const [saved, setSaved] = useState(false);
 
-  const handleInvite = () => {
-    if (!inviteForm.email || !inviteForm.fullName) return;
-    setInviteError("");
+  const isOwner = currentUserRole === "owner";
+
+  const handleAdd = () => {
+    if (!addForm.email || !addForm.fullName || !addForm.password) return;
+    setAddError("");
+    setAddSuccess("");
     startTransition(async () => {
       try {
-        await inviteUser({
-          email: inviteForm.email,
-          fullName: inviteForm.fullName,
-          role: inviteForm.role as "owner" | "store_manager" | "store_employee" | "production_employee" | "accountant",
+        await createUserWithPassword({
+          email: addForm.email,
+          fullName: addForm.fullName,
+          role: addForm.role as Role,
+          password: addForm.password,
         });
-        setShowInvite(false);
-        setInviteForm({ fullName: "", email: "", role: "store_employee" });
+        setAddSuccess(`Nalog za ${addForm.fullName} je kreiran. Lozinka: ${addForm.password}`);
+        setAddForm({ fullName: "", email: "", role: "store_employee", password: "" });
         router.refresh();
       } catch (e) {
-        setInviteError(e instanceof Error ? e.message : "Greška pri slanju pozivnice");
+        setAddError(e instanceof Error ? e.message : "Greška pri kreiranju korisnika");
+      }
+    });
+  };
+
+  const handleRoleChange = (userId: string, role: Role) => {
+    startTransition(async () => {
+      try {
+        await updateUserRole(userId, role);
+        setEditingRole(null);
+        router.refresh();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Greška");
+      }
+    });
+  };
+
+  const handleToggleActive = (userId: string, name: string, isActive: boolean) => {
+    const action = isActive ? "deaktivirate" : "reaktivirate";
+    if (!confirm(`Da li sigurno želite da ${action} nalog za ${name}?`)) return;
+    startTransition(async () => {
+      try {
+        await toggleUserActive(userId);
+        router.refresh();
+      } catch (e) {
+        alert(e instanceof Error ? e.message : "Greška");
       }
     });
   };
@@ -75,7 +126,6 @@ export function SettingsClient({ users, company }: { users: User[]; company: Com
         <p className="text-muted-foreground text-sm mt-1">Upravljanje sistemom</p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 border-b">
         {tabs.map((t) => (
           <button key={t} onClick={() => setActiveTab(t)}
@@ -86,59 +136,84 @@ export function SettingsClient({ users, company }: { users: User[]; company: Com
         ))}
       </div>
 
-      {/* Korisnici */}
+      {/* ── Korisnici ── */}
       {activeTab === "Korisnici" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{users.length} korisnika u sistemu</p>
-            <button onClick={() => setShowInvite(true)}
-              className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
-              <Plus className="w-4 h-4" /> Pozovi korisnika
-            </button>
+            {isOwner && (
+              <button onClick={() => { setShowAdd(true); setAddError(""); setAddSuccess(""); }}
+                className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
+                <Plus className="w-4 h-4" /> Dodaj korisnika
+              </button>
+            )}
           </div>
 
-          {/* Invite modal */}
-          {showInvite && (
+          {/* Modal — dodaj korisnika */}
+          {showAdd && (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-xl w-full max-w-md p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Pozovi korisnika</h2>
-                  <button onClick={() => setShowInvite(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
+                  <h2 className="text-lg font-semibold">Dodaj korisnika</h2>
+                  <button onClick={() => setShowAdd(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
                 </div>
                 <div className="space-y-3">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Ime i prezime *</label>
-                    <Input value={inviteForm.fullName}
-                      onChange={(e) => setInviteForm({ ...inviteForm, fullName: e.target.value })}
+                    <Input value={addForm.fullName}
+                      onChange={(e) => setAddForm({ ...addForm, fullName: e.target.value })}
                       className="mt-1" placeholder="npr. Milena Kovač" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Email *</label>
-                    <Input type="email" value={inviteForm.email}
-                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                      className="mt-1" placeholder="milena@millimeter.me" />
+                    <Input type="email" value={addForm.email}
+                      onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                      className="mt-1" placeholder="milena@millimeter.rs" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Privremena lozinka *</label>
+                    <Input value={addForm.password}
+                      onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+                      className="mt-1" placeholder="npr. Millimeter2026!" />
+                    <p className="text-xs text-muted-foreground mt-1">Korisnik može promijeniti lozinku nakon prve prijave</p>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Uloga</label>
-                    <select value={inviteForm.role}
-                      onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value })}
+                    <select value={addForm.role}
+                      onChange={(e) => setAddForm({ ...addForm, role: e.target.value })}
                       className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
-                      {Object.entries(roleLabels).map(([val, label]) => (
+                      {Object.entries(ROLE_LABELS).map(([val, label]) => (
                         <option key={val} value={val}>{label}</option>
                       ))}
                     </select>
+                    <p className="text-xs text-muted-foreground mt-1">{ROLE_DESC[addForm.role]}</p>
                   </div>
-                  {inviteError && (
-                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">{inviteError}</p>
+
+                  {addError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">{addError}</p>
                   )}
-                  <div className="flex gap-2 pt-2">
-                    <button onClick={() => setShowInvite(false)}
-                      className="flex-1 border rounded-md py-2 text-sm hover:bg-muted">Otkaži</button>
-                    <button onClick={handleInvite} disabled={isPending || !inviteForm.email || !inviteForm.fullName}
-                      className="flex-1 bg-black text-white rounded-md py-2 text-sm hover:bg-black/80 disabled:opacity-50">
-                      {isPending ? "Slanje..." : "Pošalji pozivnicu"}
-                    </button>
-                  </div>
+                  {addSuccess && (
+                    <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-3">
+                      <p className="font-medium flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Korisnik kreiran!</p>
+                      <p className="mt-1">{addSuccess}</p>
+                    </div>
+                  )}
+
+                  {!addSuccess && (
+                    <div className="flex gap-2 pt-2">
+                      <button onClick={() => setShowAdd(false)}
+                        className="flex-1 border rounded-md py-2 text-sm hover:bg-muted">Otkaži</button>
+                      <button onClick={handleAdd}
+                        disabled={isPending || !addForm.email || !addForm.fullName || !addForm.password}
+                        className="flex-1 bg-black text-white rounded-md py-2 text-sm hover:bg-black/80 disabled:opacity-50">
+                        {isPending ? "Kreiranje..." : "Kreiraj nalog"}
+                      </button>
+                    </div>
+                  )}
+                  {addSuccess && (
+                    <button onClick={() => setShowAdd(false)}
+                      className="w-full border rounded-md py-2 text-sm hover:bg-muted">Zatvori</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -153,45 +228,99 @@ export function SettingsClient({ users, company }: { users: User[]; company: Com
                     <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Uloga</th>
                     <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
                     <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Dodat</th>
+                    {isOwner && <th className="px-4 py-3" />}
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
-                    <tr key={u.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
+                    <tr key={u.id} className={`border-b last:border-0 transition-colors ${u.isActive ? "hover:bg-muted/20" : "opacity-50"}`}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-medium shrink-0">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium shrink-0
+                            ${u.id === currentUserId ? "bg-black text-white" : "bg-muted text-foreground"}`}>
                             {u.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-sm font-medium">{u.fullName}</p>
+                            <p className="text-sm font-medium">
+                              {u.fullName}
+                              {u.id === currentUserId && <span className="text-xs text-muted-foreground ml-1">(ti)</span>}
+                            </p>
                             <p className="text-xs text-muted-foreground">{u.email}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleColors[u.role] ?? "bg-gray-100"}`}>
-                          {roleLabels[u.role] ?? u.role}
-                        </span>
+                        {isOwner && editingRole === u.id ? (
+                          <select
+                            defaultValue={u.role}
+                            onChange={(e) => handleRoleChange(u.id, e.target.value as Role)}
+                            disabled={isPending}
+                            autoFocus
+                            onBlur={() => setEditingRole(null)}
+                            className="text-xs border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                          >
+                            {Object.entries(ROLE_LABELS).map(([val, label]) => (
+                              <option key={val} value={val}>{label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            onClick={() => isOwner && u.id !== currentUserId && setEditingRole(u.id)}
+                            title={isOwner && u.id !== currentUserId ? "Klikni za promjenu uloge" : undefined}
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[u.role] ?? "bg-gray-100"}
+                              ${isOwner && u.id !== currentUserId ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+                          >
+                            {ROLE_LABELS[u.role] ?? u.role}
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${u.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}>
-                          {u.isActive ? "Aktivan" : "Neaktivan"}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 w-fit
+                          ${u.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}>
+                          {u.isActive ? <><UserCheck className="w-3 h-3" /> Aktivan</> : <><UserX className="w-3 h-3" /> Neaktivan</>}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {new Date(u.createdAt).toLocaleDateString("sr-RS")}
                       </td>
+                      {isOwner && (
+                        <td className="px-4 py-3">
+                          {u.id !== currentUserId && (
+                            <button
+                              onClick={() => handleToggleActive(u.id, u.fullName, u.isActive)}
+                              disabled={isPending}
+                              title={u.isActive ? "Deaktiviraj korisnika" : "Reaktiviraj korisnika"}
+                              className="text-xs text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-50"
+                            >
+                              {u.isActive ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4 text-green-600" />}
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </CardContent>
           </Card>
+
+          {isOwner && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 flex items-start gap-2">
+              <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Uloge i pristup</p>
+                <div className="mt-1 space-y-0.5">
+                  {Object.entries(ROLE_DESC).map(([role, desc]) => (
+                    <p key={role}><span className="font-medium">{ROLE_LABELS[role]}:</span> {desc}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Kompanija */}
+      {/* ── Kompanija ── */}
       {activeTab === "Kompanija" && (
         <div className="space-y-4 max-w-xl">
           <Card>
@@ -204,16 +333,16 @@ export function SettingsClient({ users, company }: { users: User[]; company: Com
                   className="mt-1" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">PIB / Tax ID</label>
+                <label className="text-xs font-medium text-muted-foreground">PIB</label>
                 <Input value={companyForm.taxId}
                   onChange={(e) => setCompanyForm({ ...companyForm, taxId: e.target.value })}
-                  className="mt-1" placeholder="npr. 02847361" />
+                  className="mt-1" placeholder="npr. 12345678" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Adresa</label>
                 <Input value={companyForm.address}
                   onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
-                  className="mt-1" placeholder="npr. Podgorica, Crna Gora" />
+                  className="mt-1" placeholder="npr. Omladinskih brigada 86g, Beograd" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Zemlja</label>
@@ -221,7 +350,7 @@ export function SettingsClient({ users, company }: { users: User[]; company: Com
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Valuta</label>
-                <Input value={company?.currency ?? "EUR"} disabled className="mt-1 bg-muted/50" />
+                <Input value={company?.currency ?? "RSD"} disabled className="mt-1 bg-muted/50" />
               </div>
               <button onClick={handleSaveCompany} disabled={isPending}
                 className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 disabled:opacity-50 transition-colors">
@@ -232,26 +361,24 @@ export function SettingsClient({ users, company }: { users: User[]; company: Com
         </div>
       )}
 
-      {/* Integracije */}
+      {/* ── Integracije ── */}
       {activeTab === "Integracije" && (
         <div className="space-y-4 max-w-xl">
           {[
-            { name: "gocreate.nu", desc: "Partnerski sajt za naloge", soon: true },
-            { name: "Resend (Email)", desc: "Automatska email obaveštenja", soon: false },
-            { name: "Twilio (SMS)", desc: "SMS podsetnici za klijente", soon: false },
-            { name: "Fiskalna kasa (CG)", desc: "eFiskalizacija Crna Gora", soon: false },
+            { name: "GoCreate (Munro)", desc: "Automatski sync klijenata i praćenje Munro naloga", connected: true },
+            { name: "Resend (Email)", desc: "Automatska email obaveštenja klijentima", connected: false },
+            { name: "Twilio (SMS)", desc: "SMS podsetnici za klijente", connected: false },
           ].map((i) => (
             <Card key={i.name}>
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm">{i.name}</p>
-                      {i.soon && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Uskoro</span>}
-                    </div>
+                    <p className="font-medium text-sm">{i.name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{i.desc}</p>
                   </div>
-                  <span className="text-xs text-muted-foreground">Nije povezano</span>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${i.connected ? "bg-green-100 text-green-700" : "text-muted-foreground"}`}>
+                    {i.connected ? "Povezano" : "Nije povezano"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
