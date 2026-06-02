@@ -16,78 +16,59 @@ export async function GET(req: Request) {
 
   const results: Record<string, unknown> = {};
 
-  // Sva poznata polja, ProductData = prazan objekat — vidimo šta traži
+  const itemObj = { Id: 8, Name: "Shirt" };
+  const orderBase = {
+    ShopId: 2293,
+    CustomerID: 520011,
+    Item: itemObj,
+    Fabric: "SH00014",
+    Status: "Processed",
+    Occasion: "Everyday",
+    ShopOrderNumber: "TEST-001",
+  };
+
+  // T1: OrderData + Item kao {Id,Name}, ProductData prazan
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...auth,
-        OrderData: {
-          ShopId: 2293,
-          CustomerID: 520011,
-          Item: 8,              // OrderTypeId: 8 = Shirt
-          Fabric: "SH00014",
-          Status: "Processed",
-          Occasion: "Everyday",
-          ShopOrderNumber: "",
-          ProductData: {},
-        }
-      }),
+      body: JSON.stringify({ ...auth, OrderData: { ...orderBase, ProductData: {} } }),
     });
-    results["t1_all_fields_empty_ProductData"] = { status: r.status, body: await r.text() };
+    results["t1_item_IdAndName"] = { status: r.status, body: await r.text() };
   } catch (e) { results["t1"] = String(e); }
 
-  // Item kao string
+  // T2: input kao wrapper oko OrderData
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...auth,
-        OrderData: {
-          ShopId: 2293,
-          CustomerID: 520011,
-          Item: "Shirt",
-          Fabric: "SH00014",
-          Status: "Processed",
-          Occasion: "Everyday",
-          ShopOrderNumber: "",
-          ProductData: {},
-        }
-      }),
+      body: JSON.stringify({ ...auth, input: { OrderData: { ...orderBase, ProductData: {} } } }),
     });
-    results["t2_item_as_string"] = { status: r.status, body: await r.text() };
+    results["t2_input_wrapper"] = { status: r.status, body: await r.text() };
   } catch (e) { results["t2"] = String(e); }
 
-  // ProductData sa merama košulje (iz nalog za košulju format)
+  // T3: input = orderBase direktno (bez OrderData wrappera)
+  try {
+    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...auth, input: { ...orderBase, ProductData: {} } }),
+    });
+    results["t3_input_flat"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t3"] = String(e); }
+
+  // T4: Fabric kao {Id,Name} objekat (kao Item)
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...auth,
         OrderData: {
-          ShopId: 2293,
-          CustomerID: 520011,
-          Item: "Shirt",
-          Fabric: "SH00014",
-          Status: "Processed",
-          Occasion: "Everyday",
-          ShopOrderNumber: "TEST-001",
-          ProductData: {
-            Neck: "39",
-            Chest: "100",
-            Waist: "92",
-            Hips: "100",
-            ShoulderWidth: "46",
-            SleeveLength: "65",
-            CollarType: "Classic",
-            CuffType: "Single",
-            Fit: "Slim fit",
-          },
+          ...orderBase,
+          Fabric: { Id: 14, Name: "SH00014 white cotton twill" },
+          ProductData: {}
         }
       }),
     });
-    results["t3_with_measures"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t3"] = String(e); }
+    results["t4_fabric_IdAndName"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t4"] = String(e); }
 
   return NextResponse.json(results);
 }
