@@ -27,63 +27,76 @@ export async function GET(req: Request) {
     ShopOrderNumber: "TEST-001",
   };
 
-  // T5: input:{} prazan + OrderData sa ProductData kao prazan niz
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...auth, input: {}, OrderData: { ...orderBase, ProductData: [] } }),
-    });
-    results["t5_input_empty_pd_array"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t5"] = String(e); }
+  // Minimalni ProductData sa svim required poljima (prazni objekti)
+  const pdMinimal = {
+    StyleOrderNumber: "TEST-STYLE-001",
+    BrandingOptionData: {},
+    FitAndTryOnData: {
+      FitProfileName: "Slim Fit",
+      FitToolData: {},
+    },
+  };
 
-  // T6: input = OrderData (isti objekat na oba mjesta)
+  // T9: Minimalni ProductData — da vidimo koji sub-fieldi su required
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...auth,
-        input: { ...orderBase, ProductData: [] },
-        OrderData: { ...orderBase, ProductData: [] },
+        ...auth, input: {},
+        OrderData: { ...orderBase, ProductData: [pdMinimal] },
       }),
     });
-    results["t6_input_mirror_orderdata"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t6"] = String(e); }
+    results["t9_pd_minimal"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t9"] = String(e); }
 
-  // T7: ProductData kao niz sa jednim objektom — {Id, Name, Quantity}
+  // T10: FitToolData sa mjerama košulje
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...auth,
-        input: {},
-        OrderData: {
-          ...orderBase,
-          ProductData: [{ Id: 8, Name: "Shirt", Quantity: 1 }],
-        },
-      }),
-    });
-    results["t7_pd_IdNameQty"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t7"] = String(e); }
-
-  // T8: ProductData kao niz sa FitProfile-style objektom
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...auth,
-        input: {},
+        ...auth, input: {},
         OrderData: {
           ...orderBase,
           ProductData: [{
-            Item: { Id: 8, Name: "Shirt" },
-            Fabric: fabric,
-            Quantity: 1,
+            ...pdMinimal,
+            FitAndTryOnData: {
+              FitProfileName: "Slim Fit",
+              FitToolData: {
+                Neck: 39, Chest: 100, Waist: 90, Stomach: 92,
+                Hips: 96, FrontLength: 72, BackLength: 74,
+                Shoulder: 44, Back: 42, Sleeve: 62,
+                Bicep: 34, Forearm: 26, Wrist: 17,
+              },
+            },
           }],
         },
       }),
     });
-    results["t8_pd_item_fabric"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t8"] = String(e); }
+    results["t10_pd_measurements"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t10"] = String(e); }
+
+  // T11: BrandingOptionData sa mogućim poljima
+  try {
+    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...auth, input: {},
+        OrderData: {
+          ...orderBase,
+          ProductData: [{
+            ...pdMinimal,
+            BrandingOptionData: {
+              Monogram: "",
+              MonogramPosition: "",
+              MonogramColor: "",
+              MonogramFont: "",
+            },
+          }],
+        },
+      }),
+    });
+    results["t11_branding_fields"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t11"] = String(e); }
 
   return NextResponse.json(results);
 }
