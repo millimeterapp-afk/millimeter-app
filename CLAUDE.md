@@ -582,12 +582,21 @@ Fajl: `src/app/api/test-create/route.ts`
 #### Šta nije urađeno (Customer/Add sync trigger):
 Customer/Add funkcija postoji ali se ne poziva automatski kada se kreira klijent u Millimeter app. Sledeći korak: dodati poziv u `createCustomer` server action i sačuvati GoCreate ID nazad u `goCreateCustomerId` kolonu.
 
-### Sledeći koraci po prioritetu
-1. **Customer/Add sync** — dodati u `createCustomer` action: pozovi GoCreate, sačuvaj ID
-2. Pokrenuti `supabase/rls.sql` u Supabase SQL Editoru
-3. Kreirati Nikolin korisnički nalog (admin@millimeter.me postoji, treba Nikolin email)
-4. PDF nalog za krojača
-5. Loyalty granice u RSD
+### Status na dan 2026-06-02 — sve Faza 1+2 stavke
+
+| Stavka | Status |
+|---|---|
+| CRON_SECRET na Vercel | ✅ urađeno |
+| Nikolin korisnički nalog | ✅ urađeno |
+| RLS na svim tabelama | ✅ urađeno (potvrđeno SQL upitom) |
+| PDF nalog za krojača | ✅ urađeno (commit bd71f65) |
+| GoCreate Customer/Add sync | ✅ urađeno |
+| GoCreate Munro nalozi u UI | ✅ urađeno |
+| Loyalty granice u RSD | ⏳ čeka Nikolin odgovor — trenutno: Silver 500, Gold 1500, Platinum 3000 (EUR vrednosti!) |
+
+### Sledeći koraci
+- Pitati Nikolu za loyalty granice u RSD
+- Onboarding sesija sa Nikolom (1h uživo ili Loom)
 
 ### Kako početi novu sesiju
 1. Ovaj fajl se učitava automatski
