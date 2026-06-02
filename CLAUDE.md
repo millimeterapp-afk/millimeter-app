@@ -368,14 +368,14 @@ Kreiranje naloga nije jednostavna forma — prolazi kroz FitProfile sistem:
 
 Zbog ove kompleksnosti, automatizacija kreiranja naloga zahtijeva rebuild GoCreate klijenta unutar Millimeter app.
 
-#### Plan integracije (realan)
+#### Plan integracije (realan, FINALAN)
 
 | Šta | Moguće | Prioritet |
 |---|---|---|
-| Sync klijenata Millimeter → GoCreate via API | ✅ | #1, čeka token |
-| Praćenje statusa Munro naloga u Millimeter app | ✅ | #2, čeka token |
-| Nikola ručno kreira nalog u GoCreate | ✅ (status quo) | Ostaje |
-| Automatizacija kreiranja naloga | ❌ previše kompleksno | Ne radimo |
+| Sync klijenata Millimeter → GoCreate via API | ✅ | #1 — radimo |
+| Praćenje statusa Munro naloga u Millimeter app | ✅ | #2 — radimo |
+| Nikola ručno kreira nalog u GoCreate | ✅ (status quo) | Ostaje zauvek |
+| Automatizacija kreiranja naloga | ❌ | **Ne radimo** — `ProductPartId` su GoCreate interni ID-evi nedostupni bez njihove dokumentacije. API postoji ali nije iskoristiv. |
 
 **SSID polje** pri Customer/Add: koristiti za čuvanje Millimeter customer ID-a → laka bidirekciona sinhronizacija.
 **goCreateCustomerId** kolona treba biti dodata na `customers` tabelu u našoj bazi.
@@ -563,8 +563,8 @@ Fajl: `src/app/api/test-create/route.ts`
 - **PDF nalog za krojača:** Nije urađen
 
 ### Sledeći koraci po prioritetu
-1. Analizirati t18 odgovor (pravi Munro nalog) → završiti CreateOrder strukturu
-2. Implementirati GoCreate integraciju u app (Customer/Add sync + CreateOrder)
+1. **Implementirati Customer/Add sync** — Millimeter klijent → GoCreate (API je jasan, radi)
+2. **Implementirati status tracking** — čitanje Munro naloga koje Nikola ručno kreira u GoCreate
 3. Pokrenuti `supabase/rls.sql` u Supabase SQL Editoru
 4. Dodati `CRON_SECRET` na Vercel
 5. Kreirati Nikolin korisnički nalog
