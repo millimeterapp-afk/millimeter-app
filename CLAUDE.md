@@ -4,6 +4,21 @@ model: claude-sonnet-4-6
 
 Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe + prodaja). Sav UI tekst je na srpskom jeziku. **Uvek komuniciraj isključivo na srpskom jeziku — ekavica (ne ijekavica). Primer: "razumem", "primer", "sledeći", "ovde", "vreme" — nikad "razumijem", "primjer", "sljedeći", "ovdje", "vrijeme".**
 
+### Komunikacija sa klijentom — KRITIČNA PRAVILA
+
+Klijent je Nikola Miljković, suvlasnik firme sa prihodom ~€850.000. Svaka poruka koja ide Nikoli mora biti besprekorna.
+
+**Pre sastavljanja bilo koje poruke za Nikolu:**
+1. Proveri kod, bazu ili stvarni test rezultat za svaku tvrdnju
+2. Ako nisi 100% siguran u neku informaciju — eksplicitno reci to korisniku PRE nego što napišeš poruku
+3. Nikad ne pretpostavljaj da nešto radi — potvrdi stvarnim dokazom
+4. Ako korisnik pita "jesi siguran?" — to znači da si pogrešio, odmah ispravi
+
+**Primer loše prakse (ne raditi):**
+- Pisati "sistem automatski radi X" bez provere da li X zaista radi
+- Sastavljati poruke na osnovu pretpostavki
+- Čekati da korisnik ispravi netačne informacije
+
 ### Token optimizacija — duže sesije
 - Koristiti `/clear` kada kontekst postane dugačak
 - Posle `/clear` — CLAUDE.md se automatski učitava (nije potrebno ručno uploadovati)
