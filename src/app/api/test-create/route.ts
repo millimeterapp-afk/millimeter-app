@@ -43,45 +43,44 @@ export async function GET(req: Request) {
     { Id: 13, Name: "Wrist",       Value: 17 },
   ];
 
-  const makeProduct = (extra: Record<string, unknown> = {}) => ({
+  const makeProduct = (productPartId: number) => ({
+    ProductPartId: productPartId,
     StyleOrderNumber: "TEST-STYLE-001",
     BrandingOptionData: [],
     FitAndTryOnData: { FitProfileName: "Slim Fit", FitToolData: fitTool },
-    ...extra,
   });
 
-  // T18: Dohvati pravi Munro nalog da vidimo ProductData strukturu
+  // T21: Dohvati nedavne naloge za shop 2293 da nađemo prave OrderNumber-e
+  try {
+    const r = await fetch("https://api.gocreate.nu/Order/ByDate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...auth, ShopId: 2293, Date: "2026-01-01" }),
+    });
+    results["t21_orders_by_date"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t21"] = String(e); }
+
+  // T22: Dohvati nalog po broju — probaj drugačiji format
   try {
     const r = await fetch("https://api.gocreate.nu/Order/ByOrderNumber", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...auth, ShopId: 2293, OrderNumber: "MILL.110.RS.0000034" }),
+      body: JSON.stringify({ ...auth, ShopId: 2293, OrderNumber: "MILL.110.RS.34" }),
     });
-    results["t18_fetch_real_order"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t18"] = String(e); }
+    results["t22_order_short_format"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t22"] = String(e); }
 
-  // T19: ProductData item sa Id: 8 (shirt type ID)
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...auth, input: {},
-        OrderData: { ...orderBase, ProductData: [makeProduct({ Id: 8 })] },
-      }),
-    });
-    results["t19_pd_id8"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t19"] = String(e); }
-
-  // T20: ProductData item sa ProductPartId: 8
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...auth, input: {},
-        OrderData: { ...orderBase, ProductData: [makeProduct({ ProductPartId: 8 })] },
-      }),
-    });
-    results["t20_pd_productpartid8"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t20"] = String(e); }
+  // T23-T26: Brute force ProductPartId (1, 2, 3, 100)
+  for (const ppId of [1, 2, 3, 100]) {
+    try {
+      const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...auth, input: {},
+          OrderData: { ...orderBase, ProductData: [makeProduct(ppId)] },
+        }),
+      });
+      results[`t_ppid_${ppId}`] = { status: r.status, body: await r.text() };
+    } catch (e) { results[`t_ppid_${ppId}`] = String(e); }
+  }
 
   return NextResponse.json(results);
 }
