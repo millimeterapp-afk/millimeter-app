@@ -112,6 +112,31 @@ export async function createCustomer(data: {
     });
   }
 
+  // GoCreate sync — ne blokira ako ne uspe
+  try {
+    const gc = await addGoCreateCustomer({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      phone: data.phone,
+      email: data.email,
+      ssid: customer.id,
+    });
+
+    let gcId = gc.id;
+    if (!gcId && gc.alreadyExists) {
+      gcId = await searchGoCreateCustomerByName(data.firstName, data.lastName);
+    }
+
+    if (gcId) {
+      await db
+        .update(customers)
+        .set({ goCreateCustomerId: String(gcId), goCreateSyncedAt: new Date() })
+        .where(eq(customers.id, customer.id));
+    }
+  } catch (err) {
+    console.error("[GoCreate] sync failed for new customer:", err);
+  }
+
   revalidatePath("/customers");
   return customer;
 }
