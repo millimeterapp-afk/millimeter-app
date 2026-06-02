@@ -525,119 +525,69 @@ Ne `aws-0-eu-central-1`. Pogrešan region = app ne može da se spoji na bazu.
 
 ---
 
-## 16. Status na dan 2026-06-02 (handover između sesija)
+## 16. Status na dan 2026-06-03 (handover između sesija)
 
-### Šta je urađeno
-- GoCreate API token primljen ✅ (u .env.local)
-- Keepalive cron job commitovan ✅ (ali CRON_SECRET nije na Vercelu)
-- RLS SQL fajl napravljen i commitovan ✅ (`supabase/rls.sql`)
-- Ekavica + token optimizacija dodati u CLAUDE.md ✅
+### Sve Faza 1+2 stavke — ZAVRŠENO
 
-### GoCreate CreateOrder API — istraživanje (Jun 2026)
+| Stavka | Status |
+|---|---|
+| CRON_SECRET na Vercel | ✅ urađeno |
+| Nikolin korisnički nalog | ✅ urađeno (nikola@millimeter.rs) |
+| RLS na svim tabelama | ✅ potvrđeno SQL upitom — sve `rowsecurity = true` |
+| PDF nalog za krojača | ✅ urađeno (commit bd71f65) |
+| GoCreate Customer/Add sync | ✅ urađeno — novi klijenti se automatski kreiraju u GoCreate |
+| GoCreate Munro nalozi u UI | ✅ urađeno — vidljivo na profilu klijenta |
+| Loyalty granice u RSD | ⏳ čeka Nikolin odgovor — trenutno pogrešne (Silver 500, Gold 1500, Platinum 3000 su EUR vrednosti) |
+| GitHub repo | ✅ postavljen na private |
 
-**VAŽNO: API za kreiranje naloga POSTOJI** — `POST /Order/CreateOrder` funkcioniše.
+### GoCreate integracija — detalji
 
-#### Potvrđena struktura payloada:
-```json
-{
-  "UserName": "MILL_API",
-  "Password": "...",
-  "AuthenticationToken": "...",
-  "input": {},
-  "OrderData": {
-    "ShopId": 2293,
-    "CustomerID": 520011,
-    "Item": { "Id": 8, "Name": "Shirt" },
-    "Fabric": { "Id": 14, "Name": "SH00014 white cotton twill" },
-    "Status": "Processed",
-    "Occasion": "Everyday",
-    "ShopOrderNumber": "MILL-XXX",
-    "ProductData": [
-      {
-        "StyleOrderNumber": "TEST-STYLE-001",
-        "BrandingOptionData": [],
-        "FitAndTryOnData": {
-          "FitProfileName": "Slim Fit",
-          "FitToolData": [
-            { "Id": 1, "Name": "Neck", "Value": 39 },
-            { "Id": 2, "Name": "Chest", "Value": 100 }
-          ]
-        }
-      }
-    ]
-  }
-}
-```
+`src/lib/gocreate.ts` — tri funkcije:
+- `addGoCreateCustomer()` — kreira klijenta, polje `MobileNumber` (ne Phone!)
+- `searchGoCreateCustomerByName()` — traži po `FirstName + LastName + PageSize`
+- `getGoCreateOrders(goCreateCustomerId)` — vraća sve naloge, parametar `CustomerID` (bez ShopId)
 
-#### Šta je rešeno:
-- `input: {}` ✅ — prazan objekat prolazi validaciju
-- `Fabric` mora biti `{ Id, Name }` ✅
-- `Item` mora biti `{ Id, Name }` ✅ (Shirt = Id 8)
-- `BrandingOptionData` mora biti niz `[]` ✅
-- `FitToolData` mora biti `List<IDNameAndValue>` = `[{ Id, Name, Value }]` ✅
-
-#### Preostali problem:
-`"Product part id : 0 is invalid"` — `ProductData[0]` nema pravi GoCreate ID.
-Sledeći korak: t18 dohvata pravi nalog (`MILL.110.RS.0000034`) da vidimo tačnu strukturu ProductData iz stvarnog naloga.
-
-#### Test endpoint (privremeni, obrisati nakon istraživanja):
-`https://millimeter-app-lyart.vercel.app/api/test-create?secret=gc-debug-2026`
-Fajl: `src/app/api/test-create/route.ts`
-
-### Šta nije urađeno
-- **CRON_SECRET na Vercel:** NE — dodati ručno (Settings → Env Vars → `CRON_SECRET=millimeter-keepalive-2026`)
-- **RLS:** SQL fajl postoji (`supabase/rls.sql`) ali nije pokrenut u Supabase
-- **GoCreate CreateOrder:** Struktura skoro rešena, čeka se odgovor t18 (pravi nalog)
-- **Nikolin korisnički nalog:** Nije kreiran
-- **PDF nalog za krojača:** Nije urađen
-
-### GoCreate integracija — ZAVRŠENO (Jun 2026)
-
-#### Šta radi:
-- `src/lib/gocreate.ts` — tri funkcije:
-  - `addGoCreateCustomer()` — kreira klijenta, polje `MobileNumber` (ne Phone!)
-  - `searchGoCreateCustomerByName()` — traži po `FirstName + LastName + PageSize` (ne SearchText+ShopId!)
-  - `getGoCreateOrders(goCreateCustomerId)` — vraća sve naloge klijenta, parametar `CustomerID` (bez ShopId)
-- Profil klijenta (`/customers/[id]`) prikazuje Munro naloge ako klijent ima `goCreateCustomerId`
-- Munro sekcija: OrderNumber, tip, tkanina, status (sa bojama), datum isporuke
-
-#### Potvrđeni API parametri (stvarnim pozivima):
+Potvrđeni API parametri stvarnim pozivima:
 | Endpoint | Ispravni parametri |
 |---|---|
 | `/Customer/Add` | `FirstName, LastName, MobileNumber, Email, SSID` |
 | `/Customer/Search` | `FirstName, LastName, PageSize` |
 | `/Order/ByCustomerId` | `CustomerID` (broj, bez ShopId) |
 
-#### Šta nije urađeno (Customer/Add sync trigger):
-Customer/Add funkcija postoji ali se ne poziva automatski kada se kreira klijent u Millimeter app. Sledeći korak: dodati poziv u `createCustomer` server action i sačuvati GoCreate ID nazad u `goCreateCustomerId` kolonu.
+### GoCreate CreateOrder — zatvoreno
 
-### GoCreate CreateOrder — sledeći korak
-Nikola treba da pošalje GoCreate supportu (ili Marianne) sledeće pitanje:
+Kreiranje naloga automatski nije moguće. `ProductPartId` su GoCreate interni ID-evi nedostupni bez njihove dokumentacije. Nikola kreira naloge ručno u GoCreate — to ostaje status quo.
+
+Nikola treba da pošalje supportu (Marianne):
 > "Hi, I'm Nikola from Millimeter (Shop ID 2293). We're building an internal management system and would like to automate shirt order creation through the GoCreate API. Is this possible for partners, and if so, do you have API documentation for order creation? Who can we contact for technical support?"
 
-NE koristiti termin "ProductPartId" — to je interni .NET naziv koji support ne zna i može zvučati sumnjično.
+### Šta čekamo od Nikole
 
-### Status na dan 2026-06-02 — sve Faza 1+2 stavke
+- Excel sa bazom klijenata (osoba formatira 5 dana)
+- Excel sa svim proizvodima i cenama
+- Odgovor od GoCreate supporta oko CreateOrder
+- Kolega koji preuzima komunikaciju sa developerom
+- Loyalty granice u RSD
 
-| Stavka | Status |
-|---|---|
-| CRON_SECRET na Vercel | ✅ urađeno |
-| Nikolin korisnički nalog | ✅ urađeno |
-| RLS na svim tabelama | ✅ urađeno (potvrđeno SQL upitom) |
-| PDF nalog za krojača | ✅ urađeno (commit bd71f65) |
-| GoCreate Customer/Add sync | ✅ urađeno |
-| GoCreate Munro nalozi u UI | ✅ urađeno |
-| Loyalty granice u RSD | ⏳ čeka Nikolin odgovor — trenutno: Silver 500, Gold 1500, Platinum 3000 (EUR vrednosti!) |
+### Šta Nikola očekuje (iz njegove poruke Jun 2026)
 
-### Sledeći koraci
-- Pitati Nikolu za loyalty granice u RSD
-- Onboarding sesija sa Nikolom (1h uživo ili Loom)
+- 6 korisničkih naloga (5 iz radnje + Nikola) — još nisu kreirani
+- Produkcija mora da vidi i menja status naloga
+- Munro: kada se nalog napravi, automatski se vidi šta je poručeno na profilu klijenta (ovo već radi za nove klijente)
+- Loyalty i izveštaji nisu prioritet — "prvo ispeglati osnovu"
+
+### Sledeći koraci po prioritetu
+
+1. Sačekati Nikolin Excel → uvesti klijente i proizvode
+2. Kreirati 5 korisničkih naloga za osoblje
+3. Podesiti produkcijsku ulogu (krojači vide naloge, menjaju status)
+4. Loyalty granice u RSD (čeka Nikolu)
 
 ### Kako početi novu sesiju
 1. Ovaj fajl se učitava automatski
 2. Pročitaj `.env.local` za kredencijale
-3. Kreni od Prioriteta 1 gore
+3. Koristi promptove iz `C:\Users\acer\.claude\prompts\` pre kodiranja
 
 ---
 
-*CLAUDE.md ažuriran: 2026-06-02*
+*CLAUDE.md ažuriran: 2026-06-03*
