@@ -85,7 +85,7 @@ export async function addGoCreateCustomer(customer: {
   const result = await post<GoCreateAddResult>("/Customer/Add", {
     FirstName: customer.firstName,
     LastName: customer.lastName,
-    Phone: customer.phone ?? "",
+    MobileNumber: customer.phone ?? "",
     Email: customer.email ?? "",
     SSID: customer.ssid,
   });
@@ -104,8 +104,9 @@ export async function searchGoCreateCustomerByName(
 ): Promise<number | null> {
   try {
     const result = await post<GoCreateSearchResult>("/Customer/Search", {
-      ShopId: SHOP_ID,
-      SearchText: `${firstName} ${lastName}`,
+      FirstName: firstName,
+      LastName: lastName,
+      PageSize: 10,
     });
 
     if (!result.CustomerInfo?.length) return null;
