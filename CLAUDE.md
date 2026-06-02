@@ -72,9 +72,10 @@ Sadrži: SUPABASE URL, ANON KEY, SERVICE ROLE KEY, DATABASE_URL, GOCREATE kreden
 $env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:<DB_LOZINKA>@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
 ```
 
-### ⚠️ Supabase Free tier — RIJEŠENO
-Cron job je implementiran: `src/app/api/cron/keepalive/route.ts` + `vercel.json`.
-Pinguuje bazu svakih 5 dana automatski. Zahtijeva env varijablu `CRON_SECRET` na Vercelu.
+### ⚠️ Supabase Free tier — DJELIMIČNO RIJEŠENO
+Cron job je implementiran i commitovan: `src/app/api/cron/keepalive/route.ts` + `vercel.json`.
+**`CRON_SECRET` env varijabla JOŠ NIJE dodana na Vercel** — bez nje cron ne radi.
+Dodati na Vercel: Settings → Environment Variables → Key: `CRON_SECRET`, Value: `millimeter-keepalive-2026`
 
 ---
 
@@ -489,12 +490,31 @@ Ne `aws-0-eu-central-1`. Pogrešan region = app ne može da se spoji na bazu.
 
 ---
 
-## 16. Kako početi novu sesiju
+## 16. Status na dan 2026-06-02 (handover između sesija)
 
-Kad otvoriš projekt u novom VS Code prozoru:
-1. Pročitaj ovaj fajl (učitava se automatski)
-2. Pročitaj `.env.local` za sve kredencijale: `Read C:\Users\acer\Desktop\millimeter-app\.env.local`
-3. Sljedeći zadatak je **RLS na Supabase** (vidi Faza 2, Prioritet 1)
+### Šta je urađeno u posljednjoj sesiji
+- GoCreate API token primljen ✅ (u .env.local)
+- Keepalive cron job commitovan ✅ (ali CRON_SECRET nije na Vercelu)
+- RLS SQL fajl napravljen i commitovan ✅ (`supabase/rls.sql`)
+- CLAUDE.md potpuno ažuriran ✅
+
+### Šta nije urađeno (odgovori na pitanja novog Claude-a)
+- **CRON_SECRET na Vercel:** NE — treba dodati ručno
+- **Izmjene sheme:** NE — schema.ts je ažuran, nema novih polja
+- **GoCreate integracija:** Token dobijen, ali kod nije napisan — nema ništa u codebase-u
+- **Bugovi:** Nema poznatih bugova
+
+### Sljedeći koraci po prioritetu
+1. Pokrenuti `supabase/rls.sql` u Supabase SQL Editoru (korisnik to radi ručno)
+2. Dodati `CRON_SECRET` na Vercel
+3. Implementirati GoCreate integraciju (Customer/Add sync + status tracking)
+4. Kreirati Nikolin korisnički nalog
+5. PDF nalog za krojača
+
+### Kako početi novu sesiju
+1. Ovaj fajl se učitava automatski
+2. Pročitaj `.env.local` za kredencijale
+3. Kreni od Prioriteta 1 gore
 
 ---
 
