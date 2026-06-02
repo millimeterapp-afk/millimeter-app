@@ -189,61 +189,177 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
     const measureData = order.measurementSnapshot as Record<string, string> | null;
     const w = window.open("", "_blank");
     if (!w) return;
-    const statusLabel = statusFlow.find(s => s.id === order.status)?.label ?? order.status;
+
     const orderDate = new Date(order.createdAt).toLocaleDateString("sr-RS");
     const printDate = new Date().toLocaleDateString("sr-RS");
-    w.document.write(`
-      <html><head><title>Nalog ${order.orderNumber}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 40px; color: #111; }
-        h1 { font-size: 22px; margin-bottom: 4px; }
-        .sub { color: #666; font-size: 13px; margin-bottom: 30px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
-        .section { border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-        .section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin: 0 0 12px; }
-        .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-        .label { color: #666; }
-        .value { font-weight: 600; }
-        .total { font-size: 20px; font-weight: bold; text-align: right; padding: 16px; background: #f9f9f9; border-radius: 8px; margin-bottom: 16px; }
-        .footer { margin-top: 40px; border-top: 1px solid #eee; padding-top: 16px; font-size: 12px; color: #999; }
-        @media print { body { padding: 20px; } }
-      </style></head>
-      <body>
-        <h1>Radni nalog — ${order.item ?? "Nalog"}</h1>
-        <div class="sub">${order.orderNumber} &nbsp;·&nbsp; Datum: ${orderDate} &nbsp;·&nbsp; ${statusLabel}</div>
-        <div class="grid">
-          <div class="section">
-            <h2>Klijent</h2>
-            ${customer ? `
-              <div class="row"><span class="label">Ime</span><span class="value">${customer.firstName} ${customer.lastName}</span></div>
-              <div class="row"><span class="label">Telefon</span><span class="value">${customer.phone}</span></div>
-            ` : ""}
-            <div class="row"><span class="label">Šablon br.</span><span class="value">${order.templateNumber ?? "—"}</span></div>
-          </div>
-          <div class="section">
-            <h2>Detalji naloga</h2>
-            <div class="row"><span class="label">Materijal</span><span class="value">${order.material ?? "—"}</span></div>
-            <div class="row"><span class="label">Kragla / Rukav / Fit</span><span class="value">${order.collarType ?? "—"} / ${order.sleeveType ?? "—"} / ${order.fitType ?? "—"}</span></div>
-            <div class="row"><span class="label">Rok isporuke</span><span class="value">${order.dueDate ?? "—"}</span></div>
-          </div>
-        </div>
-        ${measureData && Object.keys(measureData).length > 0 ? `
-        <div class="section">
-          <h2>Merenja (cm)</h2>
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
-            ${Object.entries(measureData).map(([k, v]) => `
-              <div style="background:#f9f9f9;padding:8px;border-radius:6px">
-                <div style="font-size:11px;color:#888;text-transform:capitalize">${k}</div>
-                <div style="font-size:15px;font-weight:600">${v && v !== "—" ? v + " cm" : "—"}</div>
-              </div>`).join("")}
-          </div>
-        </div>` : ""}
-        ${order.notes ? `<div class="section"><h2>Napomene</h2><p style="font-size:14px">${order.notes}</p></div>` : ""}
-        <div class="total">Ukupno: RSD ${totalAmount.toLocaleString()}</div>
-        <div class="footer">Millimeter D.O.O. · Beograd, Srbija · Štampano: ${printDate}</div>
-        <script>window.onload = () => { window.print(); }<\/script>
-      </body></html>
-    `);
+    const isMunro = order.productionFlow === "munro";
+
+    const MEASURE_LABELS: Record<string, string> = {
+      vrat: "Vrat", grudi: "Grudi", struk: "Struk", stomak: "Stomak",
+      kukovi: "Kukovi", duzina_napred: "Dužina napred", duzina_nazad: "Dužina nazad",
+      aksla: "Aksla", ledja: "Leđa", rukav: "Rukav",
+      biceps: "Biceps", podlaktica: "Podlaktica", zglob: "Zglob",
+    };
+    const MEASURE_ORDER = ["vrat","grudi","struk","stomak","kukovi","duzina_napred","duzina_nazad","aksla","ledja","rukav","biceps","podlaktica","zglob"];
+
+    const measures = measureData
+      ? MEASURE_ORDER
+          .filter(k => measureData[k] && measureData[k] !== "—")
+          .map(k => ({ label: MEASURE_LABELS[k] ?? k, value: measureData[k] }))
+      : [];
+
+    const hasMonogram = measureData?.monogram_pozicija;
+    const specs = [
+      order.collarType ? `Kragla: <strong>${order.collarType}</strong>` : null,
+      order.sleeveType ? `Manžetna: <strong>${order.sleeveType}</strong>` : null,
+      order.fitType    ? `Fit: <strong>${order.fitType}</strong>`         : null,
+    ].filter(Boolean).join(" &nbsp;·&nbsp; ");
+
+    w.document.write(`<!DOCTYPE html>
+<html lang="sr"><head>
+<meta charset="UTF-8">
+<title>Nalog ${order.orderNumber}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 28px 32px; max-width: 780px; margin: auto; }
+  /* ── Header ── */
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid #111; }
+  .brand { font-size: 22px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+  .brand span { font-weight: 300; }
+  .brand-sub { font-size: 10px; color: #888; letter-spacing: 0.05em; margin-top: 2px; }
+  .order-meta { text-align: right; }
+  .order-num { font-size: 18px; font-weight: 700; font-family: monospace; }
+  .order-date { font-size: 11px; color: #666; margin-top: 3px; }
+  .flow-badge { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; margin-top: 5px; background: ${isMunro ? "#ede9fe" : "#f0fdf4"}; color: ${isMunro ? "#7c3aed" : "#15803d"}; border: 1px solid ${isMunro ? "#c4b5fd" : "#86efac"}; }
+  /* ── Title bar ── */
+  .title-bar { background: #111; color: #fff; padding: 10px 16px; border-radius: 6px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .title-bar h1 { font-size: 17px; font-weight: 700; }
+  .title-bar .due { font-size: 12px; color: #ccc; }
+  .title-bar .due strong { color: #fbbf24; font-size: 14px; }
+  /* ── Two-col info ── */
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .card { border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px 14px; }
+  .card-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #999; font-weight: 700; margin-bottom: 8px; }
+  .card-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f3f3f3; font-size: 12.5px; }
+  .card-row:last-child { border-bottom: none; }
+  .card-row .lbl { color: #666; }
+  .card-row .val { font-weight: 600; text-align: right; max-width: 55%; }
+  /* ── Specs strip ── */
+  .specs { background: #f8f8f8; border: 1px solid #e5e5e5; border-radius: 6px; padding: 9px 14px; font-size: 12.5px; color: #444; margin-bottom: 14px; }
+  /* ── Measurements ── */
+  .meas-section { border: 1px solid #e5e5e5; border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; }
+  .meas-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #999; font-weight: 700; margin-bottom: 10px; }
+  .meas-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+  .meas-cell { text-align: center; border: 1px solid #e9e9e9; border-radius: 5px; padding: 7px 4px; background: #fafafa; }
+  .meas-cell .ml { font-size: 9.5px; color: #888; margin-bottom: 3px; }
+  .meas-cell .mv { font-size: 16px; font-weight: 700; color: #111; line-height: 1; }
+  .meas-cell .mu { font-size: 9px; color: #aaa; }
+  /* ── Monogram ── */
+  .mono-section { border: 1px solid #ddd6fe; border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; background: #faf5ff; }
+  .mono-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #7c3aed; font-weight: 700; margin-bottom: 6px; }
+  .mono-row { display: flex; gap: 24px; font-size: 12.5px; }
+  .mono-row span { color: #888; margin-right: 4px; }
+  /* ── Notes ── */
+  .notes { border: 1px solid #fed7aa; background: #fff7ed; border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; }
+  .notes-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #c2410c; font-weight: 700; margin-bottom: 5px; }
+  .notes p { font-size: 12.5px; color: #431407; line-height: 1.5; }
+  /* ── Sign strip ── */
+  .sign-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e5e5e5; }
+  .sign-box .sign-label { font-size: 9.5px; color: #999; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 28px; }
+  .sign-box .sign-line { border-bottom: 1px solid #ccc; }
+  /* ── Footer ── */
+  .footer { margin-top: 14px; font-size: 10px; color: #bbb; text-align: center; }
+  @media print {
+    body { padding: 16px 20px; }
+    @page { margin: 10mm; size: A4; }
+  }
+</style>
+</head><body>
+
+<div class="header">
+  <div>
+    <div class="brand">MILLI<span>METER</span></div>
+    <div class="brand-sub">PREMIUM KROJAČNICA · BEOGRAD</div>
+  </div>
+  <div class="order-meta">
+    <div class="order-num">${order.orderNumber}</div>
+    <div class="order-date">Datum naloga: ${orderDate}</div>
+    <div><span class="flow-badge">${isMunro ? "MUNRO" : "MILLIMETER"} PRODUKCIJA</span></div>
+  </div>
+</div>
+
+<div class="title-bar">
+  <h1>${order.item ?? "Nalog"}</h1>
+  <div class="due">Rok isporuke: <strong>${order.dueDate ?? "nije određen"}</strong></div>
+</div>
+
+<div class="info-grid">
+  <div class="card">
+    <div class="card-title">Klijent</div>
+    ${customer ? `
+      <div class="card-row"><span class="lbl">Ime i prezime</span><span class="val">${customer.firstName} ${customer.lastName}</span></div>
+      <div class="card-row"><span class="lbl">Telefon</span><span class="val">${customer.phone}</span></div>
+      ${customer.templateNumber ? `<div class="card-row"><span class="lbl">Šablon br.</span><span class="val" style="font-family:monospace;font-size:14px;font-weight:800">${customer.templateNumber}</span></div>` : ""}
+    ` : `<div class="card-row"><span class="lbl">—</span></div>`}
+    ${order.templateNumber && order.templateNumber !== customer?.templateNumber ? `<div class="card-row"><span class="lbl">Šablon (nalog)</span><span class="val" style="font-family:monospace">${order.templateNumber}</span></div>` : ""}
+  </div>
+  <div class="card">
+    <div class="card-title">Specifikacija</div>
+    ${order.material ? `<div class="card-row"><span class="lbl">Materijal</span><span class="val">${order.material}</span></div>` : ""}
+    ${order.collarType ? `<div class="card-row"><span class="lbl">Kragla</span><span class="val">${order.collarType}</span></div>` : ""}
+    ${order.sleeveType ? `<div class="card-row"><span class="lbl">Manžetna</span><span class="val">${order.sleeveType}</span></div>` : ""}
+    ${order.fitType ? `<div class="card-row"><span class="lbl">Fit</span><span class="val">${order.fitType}</span></div>` : ""}
+  </div>
+</div>
+
+${measures.length > 0 ? `
+<div class="meas-section">
+  <div class="meas-title">Mjere (cm)</div>
+  <div class="meas-grid">
+    ${measures.map(m => `
+      <div class="meas-cell">
+        <div class="ml">${m.label}</div>
+        <div class="mv">${m.value}</div>
+        <div class="mu">cm</div>
+      </div>`).join("")}
+  </div>
+</div>` : ""}
+
+${hasMonogram ? `
+<div class="mono-section">
+  <div class="mono-title">Monogram / Inicijali</div>
+  <div class="mono-row">
+    <div><span>Pozicija:</span><strong>${measureData?.monogram_pozicija ?? "—"}</strong></div>
+    <div><span>Boja:</span><strong>${measureData?.monogram_boja || "—"}</strong></div>
+    <div><span>Font:</span><strong>${measureData?.monogram_font ?? "—"}</strong></div>
+  </div>
+</div>` : ""}
+
+${order.notes ? `
+<div class="notes">
+  <div class="notes-title">Napomene za krojača</div>
+  <p>${order.notes}</p>
+</div>` : ""}
+
+<div class="sign-strip">
+  <div class="sign-box">
+    <div class="sign-label">Preuzeo u produkciju</div>
+    <div class="sign-line"></div>
+  </div>
+  <div class="sign-box">
+    <div class="sign-label">Datum predaje</div>
+    <div class="sign-line"></div>
+  </div>
+  <div class="sign-box">
+    <div class="sign-label">Predao u radnju</div>
+    <div class="sign-line"></div>
+  </div>
+</div>
+
+<div class="footer">Millimeter D.O.O. · Beograd, Srbija &nbsp;·&nbsp; Štampano: ${printDate} &nbsp;·&nbsp; NALOG ZA KROJAČA</div>
+
+<script>window.onload = () => { window.print(); }<\/script>
+</body></html>`);
     w.document.close();
   };
 
