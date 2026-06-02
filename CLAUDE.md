@@ -2,7 +2,13 @@
 
 model: claude-sonnet-4-6
 
-Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe + prodaja). Sav UI tekst je na srpskom jeziku. **Uvijek komuniciraj isključivo na srpskom jeziku.**
+Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe + prodaja). Sav UI tekst je na srpskom jeziku. **Uvek komuniciraj isključivo na srpskom jeziku — ekavica (ne ijekavica). Primer: "razumem", "primer", "sledeći", "ovde", "vreme" — nikad "razumijem", "primjer", "sljedeći", "ovdje", "vrijeme".**
+
+### Token optimizacija — duže sesije
+- Koristiti `/clear` kada kontekst postane dugačak
+- Posle `/clear` — CLAUDE.md se automatski učitava (nije potrebno ručno uploadovati)
+- Aktivni skillovi za ovaj projekat: `/security` (API ključevi) + `/spartan` (quality gate)
+- Ne pozivati skillove koji nisu potrebni za trenutni zadatak
 
 ---
 
