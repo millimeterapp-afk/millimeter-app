@@ -498,24 +498,77 @@ Ne `aws-0-eu-central-1`. Pogrešan region = app ne može da se spoji na bazu.
 
 ## 16. Status na dan 2026-06-02 (handover između sesija)
 
-### Šta je urađeno u posljednjoj sesiji
+### Šta je urađeno
 - GoCreate API token primljen ✅ (u .env.local)
 - Keepalive cron job commitovan ✅ (ali CRON_SECRET nije na Vercelu)
 - RLS SQL fajl napravljen i commitovan ✅ (`supabase/rls.sql`)
-- CLAUDE.md potpuno ažuriran ✅
+- Ekavica + token optimizacija dodati u CLAUDE.md ✅
 
-### Šta nije urađeno (odgovori na pitanja novog Claude-a)
-- **CRON_SECRET na Vercel:** NE — treba dodati ručno
-- **Izmjene sheme:** NE — schema.ts je ažuran, nema novih polja
-- **GoCreate integracija:** Token dobijen, ali kod nije napisan — nema ništa u codebase-u
-- **Bugovi:** Nema poznatih bugova
+### GoCreate CreateOrder API — istraživanje (Jun 2026)
 
-### Sljedeći koraci po prioritetu
-1. Pokrenuti `supabase/rls.sql` u Supabase SQL Editoru (korisnik to radi ručno)
-2. Dodati `CRON_SECRET` na Vercel
-3. Implementirati GoCreate integraciju (Customer/Add sync + status tracking)
-4. Kreirati Nikolin korisnički nalog
-5. PDF nalog za krojača
+**VAŽNO: API za kreiranje naloga POSTOJI** — `POST /Order/CreateOrder` funkcioniše.
+
+#### Potvrđena struktura payloada:
+```json
+{
+  "UserName": "MILL_API",
+  "Password": "...",
+  "AuthenticationToken": "...",
+  "input": {},
+  "OrderData": {
+    "ShopId": 2293,
+    "CustomerID": 520011,
+    "Item": { "Id": 8, "Name": "Shirt" },
+    "Fabric": { "Id": 14, "Name": "SH00014 white cotton twill" },
+    "Status": "Processed",
+    "Occasion": "Everyday",
+    "ShopOrderNumber": "MILL-XXX",
+    "ProductData": [
+      {
+        "StyleOrderNumber": "TEST-STYLE-001",
+        "BrandingOptionData": [],
+        "FitAndTryOnData": {
+          "FitProfileName": "Slim Fit",
+          "FitToolData": [
+            { "Id": 1, "Name": "Neck", "Value": 39 },
+            { "Id": 2, "Name": "Chest", "Value": 100 }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+#### Šta je rešeno:
+- `input: {}` ✅ — prazan objekat prolazi validaciju
+- `Fabric` mora biti `{ Id, Name }` ✅
+- `Item` mora biti `{ Id, Name }` ✅ (Shirt = Id 8)
+- `BrandingOptionData` mora biti niz `[]` ✅
+- `FitToolData` mora biti `List<IDNameAndValue>` = `[{ Id, Name, Value }]` ✅
+
+#### Preostali problem:
+`"Product part id : 0 is invalid"` — `ProductData[0]` nema pravi GoCreate ID.
+Sledeći korak: t18 dohvata pravi nalog (`MILL.110.RS.0000034`) da vidimo tačnu strukturu ProductData iz stvarnog naloga.
+
+#### Test endpoint (privremeni, obrisati nakon istraživanja):
+`https://millimeter-app-lyart.vercel.app/api/test-create?secret=gc-debug-2026`
+Fajl: `src/app/api/test-create/route.ts`
+
+### Šta nije urađeno
+- **CRON_SECRET na Vercel:** NE — dodati ručno (Settings → Env Vars → `CRON_SECRET=millimeter-keepalive-2026`)
+- **RLS:** SQL fajl postoji (`supabase/rls.sql`) ali nije pokrenut u Supabase
+- **GoCreate CreateOrder:** Struktura skoro rešena, čeka se odgovor t18 (pravi nalog)
+- **Nikolin korisnički nalog:** Nije kreiran
+- **PDF nalog za krojača:** Nije urađen
+
+### Sledeći koraci po prioritetu
+1. Analizirati t18 odgovor (pravi Munro nalog) → završiti CreateOrder strukturu
+2. Implementirati GoCreate integraciju u app (Customer/Add sync + CreateOrder)
+3. Pokrenuti `supabase/rls.sql` u Supabase SQL Editoru
+4. Dodati `CRON_SECRET` na Vercel
+5. Kreirati Nikolin korisnički nalog
+6. PDF nalog za krojača
 
 ### Kako početi novu sesiju
 1. Ovaj fajl se učitava automatski
