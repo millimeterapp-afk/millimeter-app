@@ -46,7 +46,7 @@ Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe +
 
 ### App admin nalog
 - **Email:** admin@millimeter.me
-- **Lozinka:** admin123
+- **Lozinka:** <vidi password manager — NE commitovati>
 - **companyId:** e44571bb-e3e9-4a11-8ea4-70cb69b0960d
 - **Role:** owner
 
@@ -64,7 +64,7 @@ Sadrži: SUPABASE URL, ANON KEY, SERVICE ROLE KEY, DATABASE_URL, GOCREATE kreden
 ### GoCreate web login (za ručni pristup)
 - **URL:** https://gocreate.nu/Login/Login
 - **Username:** Millimeter
-- **Lozinka:** (vidi password manager — Nikola41023! ako nije promijenjena)
+- **Lozinka:** <vidi password manager — NE commitovati>
 
 **DB konekcija:** PgBouncer transaction pooler (port 6543), `prepare: false`
 **Za migracije** koristiti session pooler (port 5432) sa `--force`:
