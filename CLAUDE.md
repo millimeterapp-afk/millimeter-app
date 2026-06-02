@@ -562,13 +562,32 @@ Fajl: `src/app/api/test-create/route.ts`
 - **Nikolin korisnički nalog:** Nije kreiran
 - **PDF nalog za krojača:** Nije urađen
 
+### GoCreate integracija — ZAVRŠENO (Jun 2026)
+
+#### Šta radi:
+- `src/lib/gocreate.ts` — tri funkcije:
+  - `addGoCreateCustomer()` — kreira klijenta, polje `MobileNumber` (ne Phone!)
+  - `searchGoCreateCustomerByName()` — traži po `FirstName + LastName + PageSize` (ne SearchText+ShopId!)
+  - `getGoCreateOrders(goCreateCustomerId)` — vraća sve naloge klijenta, parametar `CustomerID` (bez ShopId)
+- Profil klijenta (`/customers/[id]`) prikazuje Munro naloge ako klijent ima `goCreateCustomerId`
+- Munro sekcija: OrderNumber, tip, tkanina, status (sa bojama), datum isporuke
+
+#### Potvrđeni API parametri (stvarnim pozivima):
+| Endpoint | Ispravni parametri |
+|---|---|
+| `/Customer/Add` | `FirstName, LastName, MobileNumber, Email, SSID` |
+| `/Customer/Search` | `FirstName, LastName, PageSize` |
+| `/Order/ByCustomerId` | `CustomerID` (broj, bez ShopId) |
+
+#### Šta nije urađeno (Customer/Add sync trigger):
+Customer/Add funkcija postoji ali se ne poziva automatski kada se kreira klijent u Millimeter app. Sledeći korak: dodati poziv u `createCustomer` server action i sačuvati GoCreate ID nazad u `goCreateCustomerId` kolonu.
+
 ### Sledeći koraci po prioritetu
-1. **Implementirati Customer/Add sync** — Millimeter klijent → GoCreate (API je jasan, radi)
-2. **Implementirati status tracking** — čitanje Munro naloga koje Nikola ručno kreira u GoCreate
-3. Pokrenuti `supabase/rls.sql` u Supabase SQL Editoru
-4. Dodati `CRON_SECRET` na Vercel
-5. Kreirati Nikolin korisnički nalog
-6. PDF nalog za krojača
+1. **Customer/Add sync** — dodati u `createCustomer` action: pozovi GoCreate, sačuvaj ID
+2. Pokrenuti `supabase/rls.sql` u Supabase SQL Editoru
+3. Kreirati Nikolin korisnički nalog (admin@millimeter.me postoji, treba Nikolin email)
+4. PDF nalog za krojača
+5. Loyalty granice u RSD
 
 ### Kako početi novu sesiju
 1. Ovaj fajl se učitava automatski
