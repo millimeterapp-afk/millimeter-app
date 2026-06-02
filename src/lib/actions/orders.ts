@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { orders, materialReservations, productionTasks, materials, customers, customerMeasurements } from "@/lib/db/schema";
-import { updateLoyaltyTier } from "@/lib/actions/customers";
+import { updateLoyaltyTier, syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { createClient } from "@/lib/supabase/server";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -120,6 +120,14 @@ export async function createOrder(data: {
       measurementSnapshot: snapshot || null,
     })
     .returning();
+
+  // Za Munro naloge — sinhronizuj klijenta u GoCreate u pozadini
+  // Ne blokira kreiranje naloga ako GoCreate API nije dostupan
+  if (data.productionFlow === "munro" && data.customerId) {
+    syncCustomerToGoCreate(data.customerId).catch((err) =>
+      console.error("[GoCreate] sync failed after order create:", err)
+    );
+  }
 
   revalidatePath("/orders");
   return order;

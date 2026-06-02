@@ -79,6 +79,8 @@ export const customers = pgTable("customers", {
   lastVisitDate: date("last_visit_date"),
   totalSpent: numeric("total_spent", { precision: 10, scale: 2 }).default("0").notNull(),
   visitCount: integer("visit_count").default(0).notNull(),
+  goCreateCustomerId: text("go_create_customer_id"),
+  goCreateSyncedAt: timestamp("go_create_synced_at"),
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

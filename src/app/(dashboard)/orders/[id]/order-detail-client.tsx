@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateOrderStatus, updateOrderPayment, updateOrder } from "@/lib/actions/orders";
 import { createCorrection } from "@/lib/actions/corrections";
+import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, User, Printer, Check, CreditCard, AlertCircle, X, Wrench, Pencil } from "lucide-react";
+import { ArrowLeft, User, Printer, Check, CreditCard, AlertCircle, X, Wrench, Pencil, ExternalLink, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import type { Order, Customer, CustomerMeasurement, Correction } from "@/lib/db/schema";
 
@@ -57,6 +58,8 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
   const [materialQty, setMaterialQty] = useState("2");
   const [actionError, setActionError] = useState("");
   const [showEdit, setShowEdit] = useState(false);
+  const [gcSyncDone, setGcSyncDone] = useState(false);
+  const [gcSyncError, setGcSyncError] = useState("");
   const [editForm, setEditForm] = useState({
     item: order.item ?? "",
     totalAmount: String(Number(order.totalAmount)),
@@ -557,6 +560,96 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* GoCreate panel — samo za Munro naloge */}
+      {order.productionFlow === "munro" && (
+        <Card className="border-purple-200 bg-purple-50/40">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-medium text-purple-700 uppercase tracking-wide flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
+              Munro / GoCreate
+            </CardTitle>
+            {customer?.goCreateCustomerId && (
+              <a
+                href={`https://gocreate.nu/Customer/Detail/${customer.goCreateCustomerId}?redirectToFitProfileTab=True`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-purple-700 hover:text-purple-900 font-medium border border-purple-300 bg-white px-3 py-1.5 rounded-md hover:bg-purple-50 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Otvori u GoCreate
+              </a>
+            )}
+          </CardHeader>
+          <CardContent>
+            {customer?.goCreateCustomerId ? (
+              <div className="flex items-center gap-6 flex-wrap">
+                <div>
+                  <p className="text-xs text-muted-foreground">GoCreate ID klijenta</p>
+                  <p className="text-sm font-mono font-medium">{customer.goCreateCustomerId}</p>
+                </div>
+                {customer.goCreateSyncedAt && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Sinhronizovano</p>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(customer.goCreateSyncedAt).toLocaleDateString("sr-RS")}
+                    </p>
+                  </div>
+                )}
+                <div className="ml-auto">
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+                    Sinhronizovano
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium">Klijent nije sinhronizovan sa GoCreate</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Klikni dugme da dodaš klijenta u GoCreate i povežeš nalog
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {gcSyncError && (
+                    <p className="text-xs text-red-600">{gcSyncError}</p>
+                  )}
+                  {gcSyncDone ? (
+                    <span className="text-xs text-green-700 font-medium flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Sync pokrenuto
+                    </span>
+                  ) : (
+                    <button
+                      disabled={isPending || !customer}
+                      onClick={() => {
+                        if (!customer) return;
+                        setGcSyncError("");
+                        startTransition(async () => {
+                          try {
+                            const id = await syncCustomerToGoCreate(customer.id);
+                            if (id) {
+                              setGcSyncDone(true);
+                              router.refresh();
+                            } else {
+                              setGcSyncError("GoCreate API nije vratio ID. Provjeri kredencijale.");
+                            }
+                          } catch (e) {
+                            setGcSyncError(e instanceof Error ? e.message : "Greška pri sinhronizaciji.");
+                          }
+                        });
+                      }}
+                      className="flex items-center gap-1.5 text-xs border border-purple-300 bg-white text-purple-700 px-3 py-1.5 rounded-md hover:bg-purple-50 disabled:opacity-50 transition-colors"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      {isPending ? "Sinhronizacija..." : "Sync u GoCreate"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Payment */}
       {order.status !== "cancelled" && (

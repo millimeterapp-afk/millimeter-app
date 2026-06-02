@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
+import { addGoCreateCustomer, searchGoCreateCustomer, getGoCreateOrders } from "@/lib/gocreate";
 
 async function getCompanyId() {
   const supabase = await createClient();
@@ -330,4 +331,64 @@ export async function importCustomers(formData: FormData) {
 
   revalidatePath("/customers");
   return { inserted: toInsert.length, skipped: existingPhones.size };
+}
+
+/**
+ * Sinhronizuje klijenta u GoCreate i sačuva njihov ID u našoj bazi.
+ * Sigurno za višestruko pozivanje — preskače ako je ID već sačuvan.
+ */
+export async function syncCustomerToGoCreate(customerId: string): Promise<string | null> {
+  const companyId = await getCompanyId();
+
+  const customer = await db.query.customers.findFirst({
+    where: (c, { eq, and, isNull }) =>
+      and(eq(c.id, customerId), eq(c.companyId, companyId), isNull(c.deletedAt)),
+  });
+  if (!customer) return null;
+
+  // Već sinhronizovan
+  if (customer.goCreateCustomerId) return customer.goCreateCustomerId;
+
+  // Provjeri da li postoji u GoCreate po SSID-u (naš UUID)
+  let goCreateId = await searchGoCreateCustomer(customerId);
+
+  // Ako ne postoji — kreiraj ga
+  if (!goCreateId) {
+    const numericId = await addGoCreateCustomer({
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      phone: customer.phone,
+      email: customer.email,
+      ssid: customerId,
+    });
+    goCreateId = numericId;
+  }
+
+  if (!goCreateId) return null;
+
+  const goCreateCustomerId = String(goCreateId);
+
+  await db
+    .update(customers)
+    .set({
+      goCreateCustomerId,
+      goCreateSyncedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
+
+  revalidatePath(`/customers/${customerId}`);
+  return goCreateCustomerId;
+}
+
+/** Dohvata Munro naloge za klijenta iz GoCreate (za prikaz statusa u UI). */
+export async function fetchGoCreateOrdersForCustomer(customerId: string) {
+  const companyId = await getCompanyId();
+
+  const customer = await db.query.customers.findFirst({
+    where: (c, { eq, and }) => and(eq(c.id, customerId), eq(c.companyId, companyId)),
+  });
+  if (!customer?.goCreateCustomerId) return [];
+
+  return getGoCreateOrders(Number(customer.goCreateCustomerId));
 }
