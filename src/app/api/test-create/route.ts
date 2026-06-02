@@ -27,44 +27,55 @@ export async function GET(req: Request) {
     ShopOrderNumber: "TEST-001",
   };
 
-  const pdBase = {
+  // FitToolData kao List<IDNameAndValue>
+  const fitToolEmpty: unknown[] = [];
+  const fitToolFull = [
+    { Id: 1,  Name: "Neck",          Value: 39 },
+    { Id: 2,  Name: "Chest",         Value: 100 },
+    { Id: 3,  Name: "Waist",         Value: 90 },
+    { Id: 4,  Name: "Stomach",       Value: 92 },
+    { Id: 5,  Name: "Hips",          Value: 96 },
+    { Id: 6,  Name: "FrontLength",   Value: 72 },
+    { Id: 7,  Name: "BackLength",    Value: 74 },
+    { Id: 8,  Name: "Shoulder",      Value: 44 },
+    { Id: 9,  Name: "Back",          Value: 42 },
+    { Id: 10, Name: "Sleeve",        Value: 62 },
+    { Id: 11, Name: "Bicep",         Value: 34 },
+    { Id: 12, Name: "Forearm",       Value: 26 },
+    { Id: 13, Name: "Wrist",         Value: 17 },
+  ];
+
+  const makeProduct = (fitToolData: unknown[]) => ({
     StyleOrderNumber: "TEST-STYLE-001",
-    FitAndTryOnData: {
-      FitProfileName: "Slim Fit",
-      FitToolData: {
-        Neck: 39, Chest: 100, Waist: 90, Stomach: 92,
-        Hips: 96, FrontLength: 72, BackLength: 74,
-        Shoulder: 44, Back: 42, Sleeve: 62,
-        Bicep: 34, Forearm: 26, Wrist: 17,
-      },
-    },
-  };
+    BrandingOptionData: [],
+    FitAndTryOnData: { FitProfileName: "Slim Fit", FitToolData: fitToolData },
+  });
 
-  // T12: BrandingOptionData kao prazan niz
+  // T15: FitToolData prazan niz — proverava da li struktura prolazi
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...auth, input: {},
-        OrderData: { ...orderBase, ProductData: [{ ...pdBase, BrandingOptionData: [] }] },
+        OrderData: { ...orderBase, ProductData: [makeProduct(fitToolEmpty)] },
       }),
     });
-    results["t12_branding_empty_list"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t12"] = String(e); }
+    results["t15_fittool_empty"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t15"] = String(e); }
 
-  // T13: BrandingOptionData kao niz sa jednim praznim objektom
+  // T16: FitToolData kao niz IDNameAndValue sa merenjima
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...auth, input: {},
-        OrderData: { ...orderBase, ProductData: [{ ...pdBase, BrandingOptionData: [{}] }] },
+        OrderData: { ...orderBase, ProductData: [makeProduct(fitToolFull)] },
       }),
     });
-    results["t13_branding_one_empty"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t13"] = String(e); }
+    results["t16_fittool_measurements"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t16"] = String(e); }
 
-  // T14: BrandingOptionData sa monogram poljima kao niz
+  // T17: FitToolData sa Value kao string (slučaj da API očekuje string, ne broj)
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -72,20 +83,12 @@ export async function GET(req: Request) {
         ...auth, input: {},
         OrderData: {
           ...orderBase,
-          ProductData: [{
-            ...pdBase,
-            BrandingOptionData: [{
-              Monogram: "",
-              MonogramPosition: "",
-              MonogramColor: "",
-              MonogramFont: "",
-            }],
-          }],
+          ProductData: [makeProduct(fitToolFull.map(f => ({ ...f, Value: String(f.Value) })))],
         },
       }),
     });
-    results["t14_branding_monogram"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t14"] = String(e); }
+    results["t17_fittool_value_string"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t17"] = String(e); }
 
   return NextResponse.json(results);
 }
