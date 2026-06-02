@@ -582,6 +582,12 @@ Fajl: `src/app/api/test-create/route.ts`
 #### Šta nije urađeno (Customer/Add sync trigger):
 Customer/Add funkcija postoji ali se ne poziva automatski kada se kreira klijent u Millimeter app. Sledeći korak: dodati poziv u `createCustomer` server action i sačuvati GoCreate ID nazad u `goCreateCustomerId` kolonu.
 
+### GoCreate CreateOrder — sledeći korak
+Nikola treba da pošalje GoCreate supportu (ili Marianne) sledeće pitanje:
+> "Hi, I'm Nikola from Millimeter (Shop ID 2293). We're building an internal management system and would like to automate shirt order creation through the GoCreate API. Is this possible for partners, and if so, do you have API documentation for order creation? Who can we contact for technical support?"
+
+NE koristiti termin "ProductPartId" — to je interni .NET naziv koji support ne zna i može zvučati sumnjično.
+
 ### Status na dan 2026-06-02 — sve Faza 1+2 stavke
 
 | Stavka | Status |
