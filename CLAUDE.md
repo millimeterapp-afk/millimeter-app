@@ -1,5 +1,7 @@
 # Millimeter App — CLAUDE.md
 
+model: claude-sonnet-4-6
+
 Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe + prodaja). Sav UI tekst je na srpskom jeziku. **Uvijek komuniciraj isključivo na srpskom jeziku.**
 
 ---
@@ -44,17 +46,25 @@ Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe +
 
 ### App admin nalog
 - **Email:** admin@millimeter.me
-- **Lozinka:** <vidi password manager — NE commitovati>
+- **Lozinka:** admin123
 - **companyId:** e44571bb-e3e9-4a11-8ea4-70cb69b0960d
 - **Role:** owner
 
-### `.env.local` (nikad commitovati — u .gitignore)
-```
-NEXT_PUBLIC_SUPABASE_URL=https://zbmjhmvpavojahhnrkzp.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key iz Supabase projekta>
-SUPABASE_SERVICE_ROLE_KEY=<service role key iz Supabase projekta>
-DATABASE_URL=postgresql://postgres.zbmjhmvpavojahhnrkzp:<DB_LOZINKA>@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
-```
+### `.env.local` — svi kredencijali (čitaj ovaj fajl za prave vrijednosti)
+Fajl se nalazi na: `C:\Users\acer\Desktop\millimeter-app\.env.local`
+Sadrži: SUPABASE URL, ANON KEY, SERVICE ROLE KEY, DATABASE_URL, GOCREATE kredencijale.
+
+### GoCreate API kredencijali (u .env.local)
+- **GOCREATE_USERNAME:** MILL_API
+- **GOCREATE_PASSWORD:** (vidi .env.local)
+- **GOCREATE_AUTH_TOKEN:** (vidi .env.local)
+- **API base:** https://api.gocreate.nu
+- **Shop ID:** 2293 (Millimeter CC)
+
+### GoCreate web login (za ručni pristup)
+- **URL:** https://gocreate.nu/Login/Login
+- **Username:** Millimeter
+- **Lozinka:** (vidi password manager — Nikola41023! ako nije promijenjena)
 
 **DB konekcija:** PgBouncer transaction pooler (port 6543), `prepare: false`
 **Za migracije** koristiti session pooler (port 5432) sa `--force`:
@@ -62,10 +72,9 @@ DATABASE_URL=postgresql://postgres.zbmjhmvpavojahhnrkzp:<DB_LOZINKA>@aws-1-eu-ce
 $env:DATABASE_URL="postgresql://postgres.zbmjhmvpavojahhnrkzp:<DB_LOZINKA>@aws-1-eu-central-1.pooler.supabase.com:5432/postgres"; npx drizzle-kit push --force
 ```
 
-### ⚠️ KRITIČNO — Supabase Free tier
-Supabase Free tier **pauzira projekat nakon 7 dana neaktivnosti**. App prestaje raditi. Rješenja:
-1. Cron job koji pinguuje bazu svakih 5 dana (nije urađeno)
-2. Upgrade na Pro plan ($25/mj) — preporučeno za produkciju
+### ⚠️ Supabase Free tier — RIJEŠENO
+Cron job je implementiran: `src/app/api/cron/keepalive/route.ts` + `vercel.json`.
+Pinguuje bazu svakih 5 dana automatski. Zahtijeva env varijablu `CRON_SECRET` na Vercelu.
 
 ---
 
@@ -338,13 +347,8 @@ Kompletna lista endpointa — ništa više ne postoji:
 - `POST /Fabric/FetchFabricStockInfo` / `Post` — stanje tkanina
 - `POST /Lining/Post` — postave
 
-**Autentikacija:** Svaki request traži `UserName` + `Password` + `AuthenticationToken` (non-empty, required).
-`AuthenticationToken` je poseban API ključ koji GoCreate daje partnerima — Nikola ga mora zatražiti od GoCreate supporta.
-
-**Poruka poslana Nikoli:**
-> "I need to activate the Shop API and get an AuthenticationToken for my shop Millimeter (CC), shop ID 2293."
-
-**Status:** Čeka se odgovor od GoCreate supporta.
+**Autentikacija:** Svaki request traži `UserName` + `Password` + `AuthenticationToken`.
+**✅ Token je dobijen** — kredencijali su u .env.local kao GOCREATE_USERNAME/PASSWORD/AUTH_TOKEN.
 
 #### Tok kreiranja naloga u GoCreate (zašto nema API)
 Kreiranje naloga nije jednostavna forma — prolazi kroz FitProfile sistem:
@@ -425,14 +429,25 @@ Draft → Potvrđen → U produkciji → Gotov → Isporučen
 
 | Prioritet | Zadatak | Bilješka |
 |---|---|---|
-| 🔴 1 | Kreirati Nikolin korisnički nalog | Hitno — jedini nalog je admin |
-| 🔴 2 | Riješiti Supabase pauziranje | Cron job ili Pro plan |
+| 🔴 1 | **RLS na Supabase** | 23 CRITICAL greške u Supabase Advisoru — sve tabele bez RLS zaštite |
+| 🔴 2 | Kreirati Nikolin korisnički nalog | Jedini nalog je admin@millimeter.me |
 | 🔴 3 | PDF nalog za krojača | Krojač nema šta da dobije u ruke |
-| 🟠 4 | Munro integracija | Čeka URL + kredencijale od Nikole |
-| 🟠 5 | Uvoz klijentske baze | Čeka Nikolin formatiran Excel |
-| 🟠 6 | Korisničke uloge (owner/radnik/krojač) | UI za dodavanje korisnika |
-| 🟡 7 | Loyalty granice u RSD | Pitati Nikolu koje granice želi |
-| 🟡 8 | Onboarding za Nikolu | Loom video ili uživo sesija |
+| 🔴 4 | CRON_SECRET na Vercel | Keepalive cron job ne radi bez ove env varijable |
+| 🟠 5 | GoCreate integracija | Token dobijen ✅ — implementirati Customer/Add sync + status tracking |
+| 🟠 6 | Uvoz klijentske baze | Čeka Nikolin formatiran Excel |
+| 🟠 7 | Korisničke uloge (owner/radnik/krojač) | UI za dodavanje korisnika |
+| 🟡 8 | Loyalty granice u RSD | Trenutno su u EUR vrijednostima — pogrešno |
+| 🟡 9 | Onboarding za Nikolu | Loom video ili uživo sesija |
+
+### RLS — kako implementirati (SQL za Supabase SQL Editor)
+Supabase Dashboard → SQL Editor → pokrenuti za svaku tabelu:
+```sql
+-- Primjer za customers tabelu:
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "company_isolation" ON customers
+  USING (company_id = (SELECT company_id FROM users WHERE id = auth.uid()));
+```
+Isti pattern za sve tabele: companies, users, customers, customer_measurements, orders, material_reservations, production_tasks, corrections, materials, inventory_items, inventory_movements, sales, sale_items, payments, loyalty_events, appointments, suppliers, supplier_invoices, supplier_invoice_items, invoice_additional_costs, audit_logs
 
 ---
 
@@ -472,4 +487,15 @@ Ne `aws-0-eu-central-1`. Pogrešan region = app ne može da se spoji na bazu.
 
 ---
 
-*CLAUDE.md ažuriran: 2026-05-21*
+---
+
+## 16. Kako početi novu sesiju
+
+Kad otvoriš projekt u novom VS Code prozoru:
+1. Pročitaj ovaj fajl (učitava se automatski)
+2. Pročitaj `.env.local` za sve kredencijale: `Read C:\Users\acer\Desktop\millimeter-app\.env.local`
+3. Sljedeći zadatak je **RLS na Supabase** (vidi Faza 2, Prioritet 1)
+
+---
+
+*CLAUDE.md ažuriran: 2026-06-02*
