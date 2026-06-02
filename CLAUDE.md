@@ -4,6 +4,20 @@ model: claude-sonnet-4-6
 
 Interni poslovni sistem za krojačku firmu (CRM + nalozi + produkcija + zalihe + prodaja). Sav UI tekst je na srpskom jeziku. **Uvek komuniciraj isključivo na srpskom jeziku — ekavica (ne ijekavica). Primer: "razumem", "primer", "sledeći", "ovde", "vreme" — nikad "razumijem", "primjer", "sljedeći", "ovdje", "vrijeme".**
 
+### Promptovi (skillovi) — koristiti aktivno
+
+Fajlovi su u `C:\Users\acer\.claude\prompts\`:
+
+| Prompt | Kada koristiti |
+|---|---|
+| `tech-lead.md` | Pre svakog novog featuri ili integracije |
+| `api-verification.md` | Pre pisanja bilo kakvog API integration koda |
+| `debug-production.md` | Kada nešto ne radi u produkciji |
+| `security-audit.md` | Pre svakog deploja |
+| `codebase-audit.md` | Na početku sesije ili kada novi developer preuzima |
+
+**Naučeno iz grešaka:** GoCreate integracija — 20+ test poziva zbog pretpostavki umesto provere. Phone vs MobileNumber bug koji je prošao bez detekcije. CLAUDE.md bio na public repo sa osetljivim podacima.
+
 ### Komunikacija sa klijentom — KRITIČNA PRAVILA
 
 Klijent je Nikola Miljković, suvlasnik firme sa prihodom ~€850.000. Svaka poruka koja ide Nikoli mora biti besprekorna.
