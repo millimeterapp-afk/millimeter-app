@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-// Privremena test ruta — proverava da li postoji endpoint za kreiranje naloga
+// Privremena test ruta — istraga strukture CreateOrder
 // /api/test-create?secret=gc-debug-2026
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -16,59 +16,74 @@ export async function GET(req: Request) {
 
   const results: Record<string, unknown> = {};
 
-  const itemObj = { Id: 8, Name: "Shirt" };
+  const fabric = { Id: 14, Name: "SH00014 white cotton twill" };
   const orderBase = {
     ShopId: 2293,
     CustomerID: 520011,
-    Item: itemObj,
-    Fabric: "SH00014",
+    Item: { Id: 8, Name: "Shirt" },
+    Fabric: fabric,
     Status: "Processed",
     Occasion: "Everyday",
     ShopOrderNumber: "TEST-001",
   };
 
-  // T1: OrderData + Item kao {Id,Name}, ProductData prazan
+  // T5: input:{} prazan + OrderData sa ProductData kao prazan niz
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...auth, OrderData: { ...orderBase, ProductData: {} } }),
+      body: JSON.stringify({ ...auth, input: {}, OrderData: { ...orderBase, ProductData: [] } }),
     });
-    results["t1_item_IdAndName"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t1"] = String(e); }
+    results["t5_input_empty_pd_array"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t5"] = String(e); }
 
-  // T2: input kao wrapper oko OrderData
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...auth, input: { OrderData: { ...orderBase, ProductData: {} } } }),
-    });
-    results["t2_input_wrapper"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t2"] = String(e); }
-
-  // T3: input = orderBase direktno (bez OrderData wrappera)
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...auth, input: { ...orderBase, ProductData: {} } }),
-    });
-    results["t3_input_flat"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t3"] = String(e); }
-
-  // T4: Fabric kao {Id,Name} objekat (kao Item)
+  // T6: input = OrderData (isti objekat na oba mjesta)
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...auth,
-        OrderData: {
-          ...orderBase,
-          Fabric: { Id: 14, Name: "SH00014 white cotton twill" },
-          ProductData: {}
-        }
+        input: { ...orderBase, ProductData: [] },
+        OrderData: { ...orderBase, ProductData: [] },
       }),
     });
-    results["t4_fabric_IdAndName"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t4"] = String(e); }
+    results["t6_input_mirror_orderdata"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t6"] = String(e); }
+
+  // T7: ProductData kao niz sa jednim objektom — {Id, Name, Quantity}
+  try {
+    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...auth,
+        input: {},
+        OrderData: {
+          ...orderBase,
+          ProductData: [{ Id: 8, Name: "Shirt", Quantity: 1 }],
+        },
+      }),
+    });
+    results["t7_pd_IdNameQty"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t7"] = String(e); }
+
+  // T8: ProductData kao niz sa FitProfile-style objektom
+  try {
+    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...auth,
+        input: {},
+        OrderData: {
+          ...orderBase,
+          ProductData: [{
+            Item: { Id: 8, Name: "Shirt" },
+            Fabric: fabric,
+            Quantity: 1,
+          }],
+        },
+      }),
+    });
+    results["t8_pd_item_fabric"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t8"] = String(e); }
 
   return NextResponse.json(results);
 }
