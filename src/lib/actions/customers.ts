@@ -337,48 +337,51 @@ export async function importCustomers(formData: FormData) {
  * Sinhronizuje klijenta u GoCreate i sačuva njihov ID u našoj bazi.
  * Sigurno za višestruko pozivanje — preskače ako je ID već sačuvan.
  */
-export async function syncCustomerToGoCreate(customerId: string): Promise<string | null> {
-  const companyId = await getCompanyId();
+export async function syncCustomerToGoCreate(
+  customerId: string
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const companyId = await getCompanyId();
 
-  const customer = await db.query.customers.findFirst({
-    where: (c, { eq, and, isNull }) =>
-      and(eq(c.id, customerId), eq(c.companyId, companyId), isNull(c.deletedAt)),
-  });
-  if (!customer) return null;
-
-  // Već sinhronizovan
-  if (customer.goCreateCustomerId) return customer.goCreateCustomerId;
-
-  // Proveri da li postoji u GoCreate po SSID-u (naš UUID)
-  let goCreateId = await searchGoCreateCustomer(customerId);
-
-  // Ako ne postoji — kreiraj ga (greška se propagira do UI-ja)
-  if (!goCreateId) {
-    const numericId = await addGoCreateCustomer({
-      firstName: customer.firstName,
-      lastName: customer.lastName,
-      phone: customer.phone,
-      email: customer.email,
-      ssid: customerId,
+    const customer = await db.query.customers.findFirst({
+      where: (c, { eq, and, isNull }) =>
+        and(eq(c.id, customerId), eq(c.companyId, companyId), isNull(c.deletedAt)),
     });
-    goCreateId = numericId;
+    if (!customer) return { ok: false, error: "Klijent nije pronađen." };
+
+    if (customer.goCreateCustomerId) return { ok: true, id: customer.goCreateCustomerId };
+
+    let goCreateId = await searchGoCreateCustomer(customerId);
+
+    if (!goCreateId) {
+      const numericId = await addGoCreateCustomer({
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+        email: customer.email,
+        ssid: customerId,
+      });
+      goCreateId = numericId;
+    }
+
+    if (!goCreateId) {
+      return { ok: false, error: "GoCreate API nije vratio ID. Proverite Vercel Logs → filter 'GoCreate'." };
+    }
+
+    const goCreateCustomerId = String(goCreateId);
+
+    await db
+      .update(customers)
+      .set({ goCreateCustomerId, goCreateSyncedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
+
+    revalidatePath(`/customers/${customerId}`);
+    return { ok: true, id: goCreateCustomerId };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[GoCreate] syncCustomer error:", msg);
+    return { ok: false, error: msg };
   }
-
-  if (!goCreateId) throw new Error("GoCreate nije vratio ID klijenta. Proverite Vercel Logs za detalje.");
-
-  const goCreateCustomerId = String(goCreateId);
-
-  await db
-    .update(customers)
-    .set({
-      goCreateCustomerId,
-      goCreateSyncedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
-
-  revalidatePath(`/customers/${customerId}`);
-  return goCreateCustomerId;
 }
 
 /** Dohvata Munro naloge za klijenta iz GoCreate (za prikaz statusa u UI). */

@@ -124,9 +124,9 @@ export async function createOrder(data: {
   // Za Munro naloge — sinhronizuj klijenta u GoCreate u pozadini
   // Ne blokira kreiranje naloga ako GoCreate API nije dostupan
   if (data.productionFlow === "munro" && data.customerId) {
-    syncCustomerToGoCreate(data.customerId).catch((err) =>
-      console.error("[GoCreate] sync failed after order create:", err)
-    );
+    syncCustomerToGoCreate(data.customerId).then((result) => {
+      if (!result.ok) console.error("[GoCreate] auto-sync failed:", result.error);
+    });
   }
 
   revalidatePath("/orders");

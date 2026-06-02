@@ -741,16 +741,12 @@ ${order.notes ? `
                         if (!customer) return;
                         setGcSyncError("");
                         startTransition(async () => {
-                          try {
-                            const id = await syncCustomerToGoCreate(customer.id);
-                            if (id) {
-                              setGcSyncDone(true);
-                              router.refresh();
-                            } else {
-                              setGcSyncError("GoCreate API nije vratio ID. Proveri kredencijale.");
-                            }
-                          } catch (e) {
-                            setGcSyncError(e instanceof Error ? e.message : "Greška pri sinhronizaciji.");
+                          const result = await syncCustomerToGoCreate(customer.id);
+                          if (result.ok) {
+                            setGcSyncDone(true);
+                            router.refresh();
+                          } else {
+                            setGcSyncError(result.error);
                           }
                         });
                       }}
