@@ -187,11 +187,11 @@ export function ProductionClient({ tasks, productionCorrections }: { tasks: Task
                 <div className="flex gap-2 shrink-0">
                   <button onClick={() => resolveCorrection(c.id, true)} disabled={isPending}
                     className="text-xs bg-green-100 text-green-800 px-3 py-1.5 rounded hover:bg-green-200 font-medium disabled:opacity-50">
-                    Rješeno ✓
+                    Rešeno ✓
                   </button>
                   <button onClick={() => resolveCorrection(c.id, false)} disabled={isPending}
                     className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded hover:bg-red-200 font-medium disabled:opacity-50">
-                    Nije rješeno
+                    Nije rešeno
                   </button>
                 </div>
               </div>

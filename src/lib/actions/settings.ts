@@ -126,7 +126,7 @@ export async function updateUserRole(
   role: "owner" | "store_manager" | "store_employee" | "production_employee" | "accountant"
 ) {
   const currentUser = await getCurrentUser();
-  if (currentUser.role !== "owner") throw new Error("Samo vlasnik može mijenjati uloge");
+  if (currentUser.role !== "owner") throw new Error("Samo vlasnik može menjati uloge");
 
   await db
     .update(users)

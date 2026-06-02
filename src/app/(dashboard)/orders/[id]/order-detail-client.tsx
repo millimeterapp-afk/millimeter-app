@@ -314,7 +314,7 @@ export function OrderDetailClient({ order }: { order: OrderWithDetails }) {
 
 ${measures.length > 0 ? `
 <div class="meas-section">
-  <div class="meas-title">Mjere (cm)</div>
+  <div class="meas-title">Mere (cm)</div>
   <div class="meas-grid">
     ${measures.map(m => `
       <div class="meas-cell">
@@ -488,7 +488,7 @@ ${order.notes ? `
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Materijal</label>
-                <Input value={editForm.material} onChange={e => setEditForm({ ...editForm, material: e.target.value })} className="mt-1" placeholder="npr. Bijela flanela" />
+                <Input value={editForm.material} onChange={e => setEditForm({ ...editForm, material: e.target.value })} className="mt-1" placeholder="npr. Bela flanela" />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {[
@@ -747,7 +747,7 @@ ${order.notes ? `
                               setGcSyncDone(true);
                               router.refresh();
                             } else {
-                              setGcSyncError("GoCreate API nije vratio ID. Provjeri kredencijale.");
+                              setGcSyncError("GoCreate API nije vratio ID. Proveri kredencijale.");
                             }
                           } catch (e) {
                             setGcSyncError(e instanceof Error ? e.message : "Greška pri sinhronizaciji.");

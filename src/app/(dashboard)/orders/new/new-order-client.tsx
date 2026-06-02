@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import type { Customer, Material } from "@/lib/db/schema";
 
-const steps = ["Klijent", "Detalji", "Mjerenja", "Materijal", "Potvrda"];
+const steps = ["Klijent", "Detalji", "Merenja", "Materijal", "Potvrda"];
 
 const emptyForm = {
   customerId: "",
@@ -28,7 +28,7 @@ const emptyForm = {
   monogramPosition: "Štej",
   monogramColor: "",
   monogramFont: "Pisano",
-  // Mjerenja (cm)
+  // Merenja (cm)
   mVrat: "",
   mGrudi: "",
   mStruk: "",
@@ -176,7 +176,7 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
             </div>
             <div>
               <label className="text-xs font-medium text-muted-foreground">Naziv artikla *</label>
-              <Input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} className="mt-1" placeholder="npr. Košulja bijela formal" />
+              <Input value={form.item} onChange={(e) => setForm({ ...form, item: e.target.value })} className="mt-1" placeholder="npr. Košulja bela formal" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -223,7 +223,7 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
                 <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className="mt-1" />
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Cijena (RSD )</label>
+                <label className="text-xs font-medium text-muted-foreground">Cena (RSD)</label>
                 <Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-1" placeholder="185" />
               </div>
             </div>
@@ -246,7 +246,7 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Boja</label>
-                    <Input value={form.monogramColor} onChange={(e) => setForm({ ...form, monogramColor: e.target.value })} className="mt-1" placeholder="npr. Bijela" />
+                    <Input value={form.monogramColor} onChange={(e) => setForm({ ...form, monogramColor: e.target.value })} className="mt-1" placeholder="npr. Bela" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Font</label>
@@ -267,10 +267,10 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
           </div>
         )}
 
-        {/* Korak 3 — Mjerenja */}
+        {/* Korak 3 — Merenja */}
         {step === 2 && (
           <div className="space-y-4">
-            <h2 className="font-medium">Mjerenja (cm)</h2>
+            <h2 className="font-medium">Merenja (cm)</h2>
             <p className="text-xs text-muted-foreground">Sva polja su opcionalna — unesi samo ono što imaš.</p>
             <div className="grid grid-cols-3 gap-3">
               {([
@@ -330,7 +330,7 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
               <button onClick={() => setForm({ ...form, material: "" })}
                 className={`text-left flex items-center p-3 rounded-lg border transition-colors
                   ${form.material === "" ? "border-black bg-black/5" : "border-muted hover:bg-muted/50"}`}>
-                <span className="text-sm text-muted-foreground">Bez materijala / unijeti ručno</span>
+                <span className="text-sm text-muted-foreground">Bez materijala / uneti ručno</span>
                 {form.material === "" && <Check className="w-4 h-4 text-black ml-auto" />}
               </button>
             </div>
@@ -358,7 +358,7 @@ export function NewOrderClient({ customers, materials }: { customers: Customer[]
                 </div>
               ))}
               <div className="flex justify-between text-sm border-t pt-3">
-                <span className="text-muted-foreground">Cijena</span>
+                <span className="text-muted-foreground">Cena</span>
                 <span className="font-bold text-base">RSD {form.amount || "—"}</span>
               </div>
             </div>

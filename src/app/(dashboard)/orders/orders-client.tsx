@@ -69,7 +69,7 @@ export function OrdersClient({
       return matchSearch && matchStatus;
     })
     .sort((a, b) => {
-      // Kasni nalozi uvijek gore
+      // Kasni nalozi uvek gore
       const aOverdue = isOverdue(a) ? 0 : 1;
       const bOverdue = isOverdue(b) ? 0 : 1;
       if (aOverdue !== bOverdue) return aOverdue - bOverdue;

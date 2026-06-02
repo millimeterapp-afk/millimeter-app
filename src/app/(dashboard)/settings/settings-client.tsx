@@ -25,11 +25,11 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 const ROLE_DESC: Record<string, string> = {
-  owner: "Pun pristup — nalozi, klijenti, izvještaji, podešavanja",
-  store_manager: "Nalozi, klijenti, izvještaji — bez podešavanja",
-  store_employee: "Nalozi i klijenti — bez izvještaja",
+  owner: "Pun pristup — nalozi, klijenti, izveštaji, podešavanja",
+  store_manager: "Nalozi, klijenti, izveštaji — bez podešavanja",
+  store_employee: "Nalozi i klijenti — bez izveštaja",
   production_employee: "Samo produkcijski board i nalozi",
-  accountant: "Samo izvještaji i finansije",
+  accountant: "Samo izveštaji i finansije",
 };
 
 const tabs = ["Korisnici", "Kompanija", "Integracije"];
@@ -175,7 +175,7 @@ export function SettingsClient({
                     <Input value={addForm.password}
                       onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
                       className="mt-1" placeholder="npr. Millimeter2026!" />
-                    <p className="text-xs text-muted-foreground mt-1">Korisnik može promijeniti lozinku nakon prve prijave</p>
+                    <p className="text-xs text-muted-foreground mt-1">Korisnik može promeniti lozinku nakon prve prijave</p>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Uloga</label>

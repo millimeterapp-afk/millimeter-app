@@ -164,7 +164,7 @@ export function DashboardClient({
               </ResponsiveContainer>
             ) : (
               <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
-                Nema isporučenih naloga još uvijek
+                Nema isporučenih naloga još uvek
               </div>
             )}
           </CardContent>

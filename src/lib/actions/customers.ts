@@ -222,7 +222,7 @@ export async function addHistoricalPurchase(
     notes: data.notes || null,
   });
 
-  // Dohvati klijenta da provjerim datume
+  // Dohvati klijenta da proverim datume
   const existingCustomer = await db.query.customers.findFirst({
     where: (c, { eq }) => eq(c.id, customerId),
   });
@@ -298,7 +298,7 @@ export async function importCustomers(formData: FormData) {
   const validRows = rows.filter((r) => r["Ime"] && r["Prezime"] && r["Telefon"]);
   const phones = validRows.map((r) => String(r["Telefon"]));
 
-  // Provjeri koji telefoni već postoje
+  // Proveri koji telefoni već postoje
   const existing = phones.length > 0
     ? await db
         .select({ phone: customers.phone })
@@ -349,7 +349,7 @@ export async function syncCustomerToGoCreate(customerId: string): Promise<string
   // Već sinhronizovan
   if (customer.goCreateCustomerId) return customer.goCreateCustomerId;
 
-  // Provjeri da li postoji u GoCreate po SSID-u (naš UUID)
+  // Proveri da li postoji u GoCreate po SSID-u (naš UUID)
   let goCreateId = await searchGoCreateCustomer(customerId);
 
   // Ako ne postoji — kreiraj ga

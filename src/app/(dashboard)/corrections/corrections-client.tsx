@@ -46,7 +46,7 @@ export function CorrectionsClient({
   const tabs = [
     { key: "open", label: "Otvorene", count: corrections.filter(c => c.status === "open").length },
     { key: "in_production", label: "U produkciji", count: corrections.filter(c => c.status === "in_production").length },
-    { key: "resolved", label: "Riješene", count: corrections.filter(c => c.status === "resolved").length },
+    { key: "resolved", label: "Rešene", count: corrections.filter(c => c.status === "resolved").length },
     { key: "all", label: "Sve", count: corrections.length },
   ];
 
@@ -233,9 +233,9 @@ export function CorrectionsClient({
                     {c.status === "in_production" && (
                       <div className="flex gap-1">
                         <button onClick={() => handleStatusChange(c.id, "resolved")}
-                          className="text-xs bg-green-600 text-white px-2 py-0.5 rounded hover:bg-green-700">Rješeno ✓</button>
+                          className="text-xs bg-green-600 text-white px-2 py-0.5 rounded hover:bg-green-700">Rešeno ✓</button>
                         <button onClick={() => handleStatusChange(c.id, "not_resolved")}
-                          className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded hover:bg-red-200">Nije rješeno</button>
+                          className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded hover:bg-red-200">Nije rešeno</button>
                       </div>
                     )}
                   </div>

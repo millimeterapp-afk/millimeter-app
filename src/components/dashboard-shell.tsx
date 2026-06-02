@@ -28,7 +28,7 @@ export function DashboardShell({
         />
       )}
 
-      {/* Sidebar — na mobilnom slide-in, na desktopu uvijek vidljiv */}
+      {/* Sidebar — na mobilnom slide-in, na desktopu uvek vidljiv */}
       <div
         className={`fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:relative md:translate-x-0 md:z-auto ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"

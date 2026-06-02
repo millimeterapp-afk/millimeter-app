@@ -319,7 +319,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                   <Input value={editMatForm.category} onChange={(e) => setEditMatForm({ ...editMatForm, category: e.target.value })} className="mt-1" /></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="text-xs font-medium text-muted-foreground">Jed. mjere</label>
+                <div><label className="text-xs font-medium text-muted-foreground">Jed. mere</label>
                   <select value={editMatForm.unit} onChange={(e) => setEditMatForm({ ...editMatForm, unit: e.target.value })}
                     className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
                     {["m", "kom", "kg"].map(u => <option key={u}>{u}</option>)}
@@ -430,7 +430,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                     </select></div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-xs font-medium text-muted-foreground">Jed. mjere</label>
+                  <div><label className="text-xs font-medium text-muted-foreground">Jed. mere</label>
                     <select value={matForm.unit} onChange={(e) => setMatForm({ ...matForm, unit: e.target.value })}
                       className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
                       {["m", "kom", "kg"].map(u => <option key={u}>{u}</option>)}

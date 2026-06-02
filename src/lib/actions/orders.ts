@@ -86,7 +86,7 @@ export async function createOrder(data: {
 
   const orderNumber = await generateOrderNumber(dbUser.companyId!);
 
-  // Automatski kopiraj aktivna mjerenja klijenta ako nisu proslijeđena
+  // Automatski kopiraj aktivna merenja klijenta ako nisu prosleđena
   let snapshot = data.measurementSnapshot;
   if (!snapshot && data.customerId) {
     const activeMeasurement = await db.query.customerMeasurements.findFirst({
