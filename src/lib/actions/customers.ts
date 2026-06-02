@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
-import { addGoCreateCustomer, searchGoCreateCustomer, getGoCreateOrders } from "@/lib/gocreate";
+import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders } from "@/lib/gocreate";
 
 async function getCompanyId() {
   const supabase = await createClient();
@@ -351,21 +351,24 @@ export async function syncCustomerToGoCreate(
 
     if (customer.goCreateCustomerId) return { ok: true, id: customer.goCreateCustomerId };
 
-    let goCreateId = await searchGoCreateCustomer(customerId);
+    // Pokušaj dodavanje — bez ShopId (sa ShopId API kvari odgovor)
+    const addResult = await addGoCreateCustomer({
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      phone: customer.phone,
+      email: customer.email,
+      ssid: customerId,
+    });
 
-    if (!goCreateId) {
-      const numericId = await addGoCreateCustomer({
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        phone: customer.phone,
-        email: customer.email,
-        ssid: customerId,
-      });
-      goCreateId = numericId;
+    let goCreateId: number | null = addResult.id;
+
+    // Klijent već postoji u GoCreate — nađi ga po imenu
+    if (!goCreateId && addResult.alreadyExists) {
+      goCreateId = await searchGoCreateCustomerByName(customer.firstName, customer.lastName);
     }
 
     if (!goCreateId) {
-      return { ok: false, error: "GoCreate API nije vratio ID. Proverite Vercel Logs → filter 'GoCreate'." };
+      return { ok: false, error: "GoCreate API nije vratio ID klijenta. Proverite Vercel Logs → filter 'GoCreate'." };
     }
 
     const goCreateCustomerId = String(goCreateId);

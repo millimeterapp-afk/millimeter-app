@@ -1,5 +1,5 @@
 const BASE_URL = "https://api.gocreate.nu";
-const SHOP_ID = 2293; // Millimeter CC
+const SHOP_ID = 2293; // Millimeter CC — koristiti samo za Search i Orders, NE za Customer/Add
 
 function getAuth() {
   return {
@@ -30,16 +30,27 @@ async function post<T>(endpoint: string, body: Record<string, unknown>): Promise
   }
 }
 
-// ─── Customer ─────────────────────────────────────────────
+// ─── Tipovi ───────────────────────────────────────────────
 
-export interface GoCreateAddCustomerResult {
-  CustomerId?: number;
-  Id?: number;
-  CustomerID?: number;
-  CustomerCode?: string;
-  Success?: boolean;
-  Error?: string;
-  Message?: string;
+interface GoCreateAddResult {
+  FirstName?: string;
+  LastName?: string;
+  CustomerID?: number;       // ID pri uspešnom kreiranju (> 0)
+  IsValidResult?: boolean;
+  ErrorCode?: string[];
+  ErrorMessage?: string[];
+}
+
+interface GoCreateCustomerInfo {
+  Id?: number;               // ID u Search odgovoru
+  FirstName?: string;
+  LastName?: string;
+  Email?: string;
+  CustomerNumber?: string;
+}
+
+interface GoCreateSearchResult {
+  CustomerInfo?: GoCreateCustomerInfo[];
 }
 
 export interface GoCreateOrderStatus {
@@ -51,46 +62,64 @@ export interface GoCreateOrderStatus {
   Description?: string;
 }
 
-/** Dodaje klijenta u GoCreate i vraća njihov numerički ID. */
+// ─── Customer ─────────────────────────────────────────────
+
+/**
+ * Dodaje klijenta u GoCreate.
+ * - BEZ ShopId — sa ShopId API vraća CustomerID:0 i kvari odgovor
+ * - Vraća numerički ID ili null ako ne uspe
+ */
 export async function addGoCreateCustomer(customer: {
   firstName: string;
   lastName: string;
   phone?: string | null;
   email?: string | null;
   ssid: string;
-}): Promise<number | null> {
-  try {
-    const result = await post<GoCreateAddCustomerResult>("/Customer/Add", {
-      ShopId: SHOP_ID,
-      FirstName: customer.firstName,
-      LastName: customer.lastName,
-      Phone: customer.phone ?? "",
-      Email: customer.email ?? "",
-      SSID: customer.ssid,
-    });
+}): Promise<{ id: number | null; alreadyExists: boolean }> {
+  const result = await post<GoCreateAddResult>("/Customer/Add", {
+    FirstName: customer.firstName,
+    LastName: customer.lastName,
+    Phone: customer.phone ?? "",
+    Email: customer.email ?? "",
+    SSID: customer.ssid,
+  });
 
-    console.log("[GoCreate] addCustomer response:", JSON.stringify(result));
+  console.log("[GoCreate] addCustomer response:", JSON.stringify(result));
 
-    const id = result.CustomerId ?? result.Id ?? result.CustomerID ?? null;
-    return id ? Number(id) : null;
-  } catch (err) {
-    console.error("[GoCreate] addCustomer failed:", err);
-    // Propagiraj grešku dalje da je UI može prikazati
-    throw err;
-  }
+  const alreadyExists = result.ErrorCode?.includes("ALREADY_EXISTS") ?? false;
+  const id = result.CustomerID && result.CustomerID > 0 ? result.CustomerID : null;
+
+  return { id, alreadyExists };
 }
 
-/** Pretraži klijenta u GoCreate po SSID-u (naš interni ID). */
-export async function searchGoCreateCustomer(ssid: string): Promise<number | null> {
+/**
+ * Pretraži klijenta u GoCreate po imenu.
+ * Koristi se kad Customer/Add vrati ALREADY_EXISTS.
+ */
+export async function searchGoCreateCustomerByName(
+  firstName: string,
+  lastName: string
+): Promise<number | null> {
   try {
-    const result = await post<{ Customers?: Array<{ CustomerId?: number; SSID?: string }> }>(
-      "/Customer/Search",
-      { ShopId: SHOP_ID, SSID: ssid }
+    const result = await post<GoCreateSearchResult>("/Customer/Search", {
+      ShopId: SHOP_ID,
+      SearchText: `${firstName} ${lastName}`,
+    });
+
+    console.log("[GoCreate] search response (first 3):", JSON.stringify(result.CustomerInfo?.slice(0, 3)));
+
+    if (!result.CustomerInfo?.length) return null;
+
+    // Nađi tačan match po imenu (case-insensitive)
+    const match = result.CustomerInfo.find(
+      (c) =>
+        c.FirstName?.toLowerCase().trim() === firstName.toLowerCase().trim() &&
+        c.LastName?.toLowerCase().trim() === lastName.toLowerCase().trim()
     );
 
-    const match = result.Customers?.find((c) => c.SSID === ssid);
-    return match?.CustomerId ? Number(match.CustomerId) : null;
-  } catch {
+    return match?.Id ?? null;
+  } catch (err) {
+    console.error("[GoCreate] searchByName failed:", err);
     return null;
   }
 }
