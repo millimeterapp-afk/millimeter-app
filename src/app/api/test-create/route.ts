@@ -16,16 +16,28 @@ export async function GET(req: Request) {
 
   const results: Record<string, unknown> = {};
 
-  // Test 1: prazno OrderData
+  // Sva poznata polja, ProductData = prazan objekat — vidimo šta traži
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...auth, OrderData: {} }),
+      body: JSON.stringify({
+        ...auth,
+        OrderData: {
+          ShopId: 2293,
+          CustomerID: 520011,
+          Item: 8,              // OrderTypeId: 8 = Shirt
+          Fabric: "SH00014",
+          Status: "Processed",
+          Occasion: "Everyday",
+          ShopOrderNumber: "",
+          ProductData: {},
+        }
+      }),
     });
-    results["t1_empty_OrderData"] = { status: r.status, body: await r.text() };
+    results["t1_all_fields_empty_ProductData"] = { status: r.status, body: await r.text() };
   } catch (e) { results["t1"] = String(e); }
 
-  // Test 2: OrderData sa osnovnim poljima koja ima nalog
+  // Item kao string
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -34,31 +46,19 @@ export async function GET(req: Request) {
         OrderData: {
           ShopId: 2293,
           CustomerID: 520011,
-          OrderType: "Shirt",
-          FabricCode: "SH00014",
+          Item: "Shirt",
+          Fabric: "SH00014",
+          Status: "Processed",
+          Occasion: "Everyday",
+          ShopOrderNumber: "",
+          ProductData: {},
         }
       }),
     });
-    results["t2_basic_fields"] = { status: r.status, body: await r.text() };
+    results["t2_item_as_string"] = { status: r.status, body: await r.text() };
   } catch (e) { results["t2"] = String(e); }
 
-  // Test 3: OrderData kao lista
-  try {
-    const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...auth,
-        OrderData: [{
-          ShopId: 2293,
-          CustomerID: 520011,
-          OrderType: "Shirt",
-        }]
-      }),
-    });
-    results["t3_as_array"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t3"] = String(e); }
-
-  // Test 4: OrderData sa FitProfileId
+  // ProductData sa merama košulje (iz nalog za košulju format)
   try {
     const r = await fetch("https://api.gocreate.nu/Order/CreateOrder", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -67,14 +67,27 @@ export async function GET(req: Request) {
         OrderData: {
           ShopId: 2293,
           CustomerID: 520011,
-          FitProfileId: 1,
-          FabricCode: "SH00014",
-          Quantity: 1,
+          Item: "Shirt",
+          Fabric: "SH00014",
+          Status: "Processed",
+          Occasion: "Everyday",
+          ShopOrderNumber: "TEST-001",
+          ProductData: {
+            Neck: "39",
+            Chest: "100",
+            Waist: "92",
+            Hips: "100",
+            ShoulderWidth: "46",
+            SleeveLength: "65",
+            CollarType: "Classic",
+            CuffType: "Single",
+            Fit: "Slim fit",
+          },
         }
       }),
     });
-    results["t4_with_fitprofile"] = { status: r.status, body: await r.text() };
-  } catch (e) { results["t4"] = String(e); }
+    results["t3_with_measures"] = { status: r.status, body: await r.text() };
+  } catch (e) { results["t3"] = String(e); }
 
   return NextResponse.json(results);
 }
