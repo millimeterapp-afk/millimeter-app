@@ -442,6 +442,12 @@ Draft → Potvrđen → U produkciji → Gotov → Isporučen
 
 ## 12. Poznati rizici (Pre-mortem analiza)
 
+### 🔴 AKTIVAN BUG (2026-06-17)
+`/inventory` vraća **504 GATEWAY_TIMEOUT — MIDDLEWARE_INVOCATION_TIMEOUT**.
+Uzrok vjerovatno: middleware auth + Supabase cold start (Free tier) ILI inventory učitava svih 1.933 materijala + 92 artikla bez server-side paginacije pa middleware/funkcija timeoutuje.
+**Treba istražiti:** middleware.ts (DB poziv?), inventory page.tsx (getMaterials/getInventoryItems bez limita?), Supabase status.
+Povezano sa CRON_SECRET (nije postavljen → baza pauzira → cold start).
+
 ### 🐯 Tigeri — blokiraju upotrebu
 1. **Supabase Free tier pauziranje** — app ne radi nakon 7 dana neaktivnosti
 2. **Nema PDF naloga za krojača** — produkcija i dalje ide Viberom
@@ -590,4 +596,12 @@ Nikola treba da pošalje supportu (Marianne):
 
 ---
 
-*CLAUDE.md ažuriran: 2026-06-03*
+## 17. Update 2026-06-17
+
+- **🔴 NOVI BUG:** `/inventory` → 504 GATEWAY_TIMEOUT (MIDDLEWARE_INVOCATION_TIMEOUT). Vidi sekciju 12. Prioritet za popravku.
+- **Excel klijenata:** Nikola poslao `primerak spiska.xlsx` (6/4). Dogovoren format: samo **Ime, Prezime, Telefon** (jedan klijent po redu). Čeka se kompletan spisak.
+- **Munro CreateOrder:** definitivno zatvoreno — ne šalju se više pitanja supportu. Finalno rješenje (klijent sync + status na profilu) potvrđeno sa Nikolom kao dovoljno.
+
+---
+
+*CLAUDE.md ažuriran: 2026-06-17*
