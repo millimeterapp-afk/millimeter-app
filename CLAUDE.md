@@ -601,7 +601,10 @@ Nikola treba da pošalje supportu (Marianne):
 - **🔴 NOVI BUG:** `/inventory` → 504 GATEWAY_TIMEOUT (MIDDLEWARE_INVOCATION_TIMEOUT). Vidi sekciju 12. Prioritet za popravku.
 - **Excel klijenata:** Nikola poslao `primerak spiska.xlsx` (6/4). Dogovoren format: samo **Ime, Prezime, Telefon** (jedan klijent po redu). Čeka se kompletan spisak.
 - **Munro CreateOrder:** definitivno zatvoreno — ne šalju se više pitanja supportu. Finalno rješenje (klijent sync + status na profilu) potvrđeno sa Nikolom kao dovoljno.
-- **🔴 Supabase je BIO PAUZIRAN (root cause 504).** Resume urađen ručno. Keepalive preko Vercel cron NIJE radio. TODO: napraviti GitHub Actions keepalive (pinguje Supabase REST svaki dan) — pouzdaniji od Vercel Hobby cron-a.
+- **🔴 Supabase je BIO PAUZIRAN (root cause 504).** Resume urađen ručno. Keepalive preko Vercel cron NIJE radio. RIJEŠENO: GitHub Actions keepalive (`.github/workflows/keepalive.yml`) pinguje Supabase REST svaki dan — testiran, radi.
+- **✅ GoCreate integracija testirana end-to-end (17.6):** novi klijent iz app → stvarno se kreira u GoCreate (potvrđeno u njihovom webu), nalozi se prikazuju na profilu klijenta (vizuelno potvrđeno), deep-link dugme ka GoCreate radi. Token uživo radi.
+- **🟠 TODO — GoCreate search po telefonu:** `searchGoCreateCustomerByName` traži po imenu. Nikola kaže da ima brdo klijenata sa istim imenima → prebaciti na pretragu po telefonu (GoCreate Customer/Search podržava `MobileNumber` polje). Bitno za sync postojećih klijenata kod uvoza Excel baze.
+- **Uvoz klijenata:** referenca = TELEFON (dedup po telefonu, `importCustomers` već radi tako). Svaki klijent MORA imati Ime+Prezime+Telefon, inače se preskače (customers.ts:323).
 
 ---
 
