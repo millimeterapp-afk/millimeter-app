@@ -636,12 +636,12 @@ Forma mjera treba **korekcije +/- cm po svakoj mjeri u odnosu na odabrani šablo
 ### Status saradnje (Nikolinim riječima, jun 2026)
 "Postavka je dobra, ali ima mnogo da se dorađuje. Daleko je od završenog — tek treba da prođemo kroz to i skrenemo pažnju šta da se uradi drugačije." → Faza 1 je SKELET, slijedi iteracija na detaljima. **Kolega preuzima komunikaciju** umjesto Nikole.
 
-### Stil komunikacije sa klijentom (kako Matej piše)
-- **Ekavica + persiranje (Vi)** prema Nikoli/klijentu — UVIJEK (za razliku od interne komunikacije sa Matejem koja je jekavica)
-- Pozdrav otvara ("Zdravo Nikola" / "Ćao"), topao ali profesionalan ton
-- Kratke, jasne poruke, konkretno — bez tehničkog žargona
-- Uvijek ponudi sljedeći korak ili pitanje
-- Pred slanje bilo koje poruke klijentu: provjeriti sa Matejem prije
+### Stil komunikacije sa klijentom (kako Matej piše Nikoli)
+- **Ekavica, "ti" forma — BEZ persiranja.** (Matej i Nikola su prešli na ti.) Interna komunikacija sa Matejem je jekavica.
+- **BEZ AI tona:** bez crtica (—), bez bullet lista, bez "evo kako/evo plana". Prirodan, tečan tekst kao da kuca prijatelju.
+- Kratko, direktno, opušteno. Matejeve fraze: "Ćao", "Vazi", "u principu", "skroz", "kod nas / kod njih".
+- Bez tehničkog žargona — objasni ljudski.
+- Pred slanje bilo koje poruke klijentu: provjeriti sa Matejem prije.
 
 ---
 
