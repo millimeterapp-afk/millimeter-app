@@ -601,6 +601,47 @@ Nikola treba da pošalje supportu (Marianne):
 - **🔴 NOVI BUG:** `/inventory` → 504 GATEWAY_TIMEOUT (MIDDLEWARE_INVOCATION_TIMEOUT). Vidi sekciju 12. Prioritet za popravku.
 - **Excel klijenata:** Nikola poslao `primerak spiska.xlsx` (6/4). Dogovoren format: samo **Ime, Prezime, Telefon** (jedan klijent po redu). Čeka se kompletan spisak.
 - **Munro CreateOrder:** definitivno zatvoreno — ne šalju se više pitanja supportu. Finalno rješenje (klijent sync + status na profilu) potvrđeno sa Nikolom kao dovoljno.
+- **🔴 Supabase je BIO PAUZIRAN (root cause 504).** Resume urađen ručno. Keepalive preko Vercel cron NIJE radio. TODO: napraviti GitHub Actions keepalive (pinguje Supabase REST svaki dan) — pouzdaniji od Vercel Hobby cron-a.
+
+---
+
+## 18. Poslovni dogovor i komunikacija sa klijentom (iz WhatsApp prepiske)
+
+### Dogovor
+- **Cijena razvoja: 350€** (drugarska — Nikola je Stojanov prijatelj). Uslov: preporuka dalje ako bude zadovoljan. Ako saradnja ne ide dobro → naplata samo investiranog vremena do tada.
+- **AI operativni troškovi: ~100–150€** do kraja projekta (30€ već pokriveno). Nikola pristao da pokrije, Matej prilaže račune.
+- **Uplata ide na:** Matej Nević, Erste banka, 340 0001000287094 03
+- **Supabase $25/mj + domena ~12€/god** — Nikola JE OBAVIJEŠTEN i prihvatio (operativni trošak na njegovoj strani kad app krene u upotrebu). NE ponavljati mu to.
+
+### Kako Millimeter trenutno radi (Nikolinim riječima)
+- Nalozi: Excel tabele
+- Mjere klijenata: fizički se čuvaju pod imenom (broj bolje zbog ponavljanja imena)
+- Munro: ino dobavljač, web sistem (gocreate.nu), plaćaju karticom
+- Kasa: **Fusion Octopos** — integracija nije u skopu (kompleksno zbog poreske regulative)
+
+### Korisničke uloge — tačna specifikacija (Nikola)
+- **Vlasnici** (Nikola + Miloš): pun pristup + izvještaji
+- **Zaposleni u radnji** (5 osoba): pristup nalozima i klijentima
+- **Produkcija** (1 osoba, krojač): pristup SAMO svojoj listi naloga, mijenja status, bez ostatka sistema
+- Svako se prijavljuje svojim nalogom
+- Naloge za proizvodnju prave samo ljudi iz radnje (5 + Nikola = 6)
+
+### ⚠️ Forma za nalog — VAŽNA dorada koju Nikola traži
+Forma mjera treba **korekcije +/- cm po svakoj mjeri u odnosu na odabrani šablon** (ne samo apsolutne vrijednosti). Mjere: vrat, grudi, struk, stomak, kukovi, dužina, aksla, leđa, rukav, biceps, podlaktica, zglob. **Provjeriti da li trenutna forma ovo podržava — vjerovatno NE.**
+
+### Šta Nikola još šalje
+- Excel baza klijenata (kompletan spisak — format: Ime, Prezime, Telefon)
+- Excel sve proizvode i materijale sa cijenama (uvoz dodatnih artikala pored 92 Munro odijela)
+
+### Status saradnje (Nikolinim riječima, jun 2026)
+"Postavka je dobra, ali ima mnogo da se dorađuje. Daleko je od završenog — tek treba da prođemo kroz to i skrenemo pažnju šta da se uradi drugačije." → Faza 1 je SKELET, slijedi iteracija na detaljima. **Kolega preuzima komunikaciju** umjesto Nikole.
+
+### Stil komunikacije sa klijentom (kako Matej piše)
+- **Ekavica + persiranje (Vi)** prema Nikoli/klijentu — UVIJEK (za razliku od interne komunikacije sa Matejem koja je jekavica)
+- Pozdrav otvara ("Zdravo Nikola" / "Ćao"), topao ali profesionalan ton
+- Kratke, jasne poruke, konkretno — bez tehničkog žargona
+- Uvijek ponudi sljedeći korak ili pitanje
+- Pred slanje bilo koje poruke klijentu: provjeriti sa Matejem prije
 
 ---
 
