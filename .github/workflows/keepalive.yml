@@ -1,0 +1,28 @@
+name: Supabase Keepalive
+
+# Sprečava pauziranje Supabase Free tier projekta (pauzira nakon 7 dana neaktivnosti).
+# Pinguje REST API svaki dan — bilo kakav query resetuje timer pauziranja.
+# Pouzdanije od Vercel Hobby cron-a.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # svaki dan u 06:00 UTC
+  workflow_dispatch: {} # omogućava ručno pokretanje iz GitHub UI
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://zbmjhmvpavojahhnrkzp.supabase.co/rest/v1/companies?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "Supabase REST odgovorio: HTTP $CODE"
+          if [ "$CODE" = "000" ]; then
+            echo "Greska: baza nedostupna"
+            exit 1
+          fi
+        env:
+          SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpibWpobXZwYXZvamFoaG5ya3pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyOTQxOTUsImV4cCI6MjA5NDg3MDE5NX0.RTMeFftFz7bZZ_P86hovnEs8O7K5wPHRyO_ALPd7axs
