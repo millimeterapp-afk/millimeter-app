@@ -61,6 +61,15 @@ Klijent je Nikola Miljković, suvlasnik firme sa prihodom ~€850.000. Svaka por
 
 ## 2. Infrastruktura i nalozi
 
+### ⚙️ Model naloga (VAŽNO — pročitati prvo)
+Projekat živi na **posebnom Google nalogu klijenta** (`millimeterapp@gmail.com` → GitHub `millimeterapp-afk`), da bi mogao da se preda Nikoli. Matej radi sa **svog glavnog naloga** (`matejnevic07@gmail.com`) preko MCP konektora (Supabase + Vercel u Claude.ai).
+
+Da bi MCP sa glavnog naloga vidio projekat, glavni nalog je dodat kao **Administrator** u Supabase organizaciju klijenta (Nikola ostaje Owner). Vercel deploy ide automatski preko GitHub push-a — Vercel MCP nije nužan.
+
+**Pravilo za buduće projekte:** svaki klijent = poseban Google nalog (GitHub+Vercel+Supabase). Matej se doda kao Administrator u Supabase org + kolaborator na GitHub repo, i radi sa svog Claude naloga. Pri predaji — samo skineš svoj pristup, sve ostaje klijentu.
+
+**Bilo je duplo (riješeno 18.6):** stari deploy `millimeter-app.vercel.app` na Matejevom glavnom Vercel nalogu + stari Supabase `xejjwvsnnlmwrwcxeyki` (INACTIVE) — ostaci od početka prije prelaska na klijentski nalog. Zombi Vercel obrisan. Živi je SAMO `millimeter-app-lyart.vercel.app`.
+
 ### Supabase (baza podataka)
 - **Projekat:** `zbmjhmvpavojahhnrkzp`
 - **Region:** `eu-central-1` (Frankfurt)
