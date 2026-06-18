@@ -68,7 +68,9 @@ Da bi MCP sa glavnog naloga vidio projekat, glavni nalog je dodat kao **Administ
 
 **Pravilo za buduće projekte:** svaki klijent = poseban Google nalog (GitHub+Vercel+Supabase). Matej se doda kao Administrator u Supabase org + kolaborator na GitHub repo, i radi sa svog Claude naloga. Pri predaji — samo skineš svoj pristup, sve ostaje klijentu.
 
-**Bilo je duplo (riješeno 18.6):** stari deploy `millimeter-app.vercel.app` na Matejevom glavnom Vercel nalogu + stari Supabase `xejjwvsnnlmwrwcxeyki` (INACTIVE) — ostaci od početka prije prelaska na klijentski nalog. Zombi Vercel obrisan. Živi je SAMO `millimeter-app-lyart.vercel.app`.
+**Čišćenje duplih (gotovo 19.6):** zombi `millimeter-app.vercel.app` (Matejev glavni Vercel) — OBRISAN. Stari Supabase `xejjwvsnnlmwrwcxeyki` (INACTIVE, glavna org) — OBRISAN. Živi je SAMO `millimeter-app-lyart.vercel.app` + Supabase `zbmjhmvpavojahhnrkzp` na millimeterapp-afk nalogu.
+
+**MCP pristup potvrđen (19.6):** Matejev glavni nalog dodat kao Administrator u Supabase org "Millimeter" (`kgnfmsugfbbnrxlmuoyg`). Supabase MCP sa Matejevog Claude naloga vidi i čita živi projekat. Radi se sa glavnog naloga, projekat ostaje Nikolin.
 
 ### Supabase (baza podataka)
 - **Projekat:** `zbmjhmvpavojahhnrkzp`
