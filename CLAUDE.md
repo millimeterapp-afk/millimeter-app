@@ -659,4 +659,30 @@ Forma mjera treba **korekcije +/- cm po svakoj mjeri u odnosu na odabrani šablo
 
 ---
 
-*CLAUDE.md ažuriran: 2026-06-17*
+## 19. Status 2026-06-19 — gdje smo i šta je ostalo
+
+### ✅ Gotovo
+- Faza 1 kompletna (CRM, nalozi, produkcija, zalihe, barkodovi, uvoz 1933 materijala + 92 artikla)
+- PDF nalog za krojača
+- GoCreate integracija — testirana end-to-end (klijent sync + nalozi na profilu + deep link)
+- RLS na svih 21 tabeli, GitHub Actions keepalive, infrastruktura očišćena (nema duplih), MCP pristup sa Matejevog naloga radi
+
+### 🔨 Ostalo da se radi (sigurno, ne čeka nikog)
+1. **Korisničke uloge** — vlasnik / radnja / produkcija. Produkcija vidi SAMO svoju listu naloga + mijenja status, bez ostatka sistema. (Vidi sekciju 18 za tačnu specifikaciju.) Trenutno postoji samo admin + nikola nalog. **Najveći prioritet, temelj za ostalo.**
+2. **+/- cm korekcije mjera** na formi naloga, u odnosu na šablon. (Vidi sekciju 18 — vjerovatno NIJE implementirano, provjeriti formu.)
+3. **GoCreate search po telefonu** umjesto po imenu (sekcija 17).
+
+### ⏳ Čeka Nikolu (ne možemo bez njega)
+4. Excel baza klijenata (kompletan spisak) → uvoz
+5. Excel proizvoda sa cijenama → uvoz
+6. Feedback od kolege (preuzima komunikaciju, prolazi kroz app, šalje spisak dorada)
+
+### 🚫 Nije prioritet (Nikola: "fokus na osnovi")
+Loyalty granice (trenutno EUR vrijednosti, pogrešno), izvještaji, mobilna verzija — kasnije.
+
+### Sljedeća sesija — počni od
+Korisničke uloge (tačka 1). Ili korekcije mjera (tačka 2) ako se hoće brza vidljiva stvar.
+
+---
+
+*CLAUDE.md ažuriran: 2026-06-19*
