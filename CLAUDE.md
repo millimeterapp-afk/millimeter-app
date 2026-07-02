@@ -685,4 +685,31 @@ Korisničke uloge (tačka 1). Ili korekcije mjera (tačka 2) ako se hoće brza v
 
 ---
 
-*CLAUDE.md ažuriran: 2026-06-19*
+## 20. Sigurnosni pregled 2026-07-02 (nalazi — NIŠTA još nije popravljeno)
+
+Urađen temeljit security scan celog koda. Ranije po ozbiljnosti:
+
+### 🔴 Kritično
+1. **GitHub repo je JAVAN** (`github.com/millimeterapp-afk/millimeter-app` → 200). Prave tajne su bezbjedne (`.env.local` u gitignore, provjereno — nema DB lozinke/service key/tokena u repou). ALI:
+2. **Nikolina prava lozinka je hardkodirana kao placeholder u kodu** — `settings-client.tsx:177` (`placeholder="npr. <Nikolina login lozinka>"`). Ista lozinka koju koristi `nikola@millimeter.rs`. Fix: repo→Private + promijeni placeholder u generički + promijeni Nikolinu lozinku (bila izložena u javnom repou).
+
+### 🟠 Visoko
+3. **Nema clickjacking zaštite** — `next.config.ts` prazan, fale `X-Frame-Options`/CSP (HSTS Vercel dodaje sam). Fix: `headers()` u next.config.
+4. **Lozinka kao plain text** — `settings-client.tsx:175` polje nije `type="password"`.
+
+### 🟡 Srednje
+5. **Race condition na broju naloga** — `orders.ts:59` `generateOrderNumber` koristi `count(*)` → dupli NAL-broj pri istovremenom radu. Fix: PostgreSQL SEQUENCE.
+6. **createOrder ne provjerava da customerId pripada firmi** — `orders.ts:70`. Fix: provjera prije insert-a.
+7. **Vercel keepalive ruta mrtva** — middleware matcher je redirektuje na /login. Nebitno (GitHub Actions keepalive radi nezavisno), ali mrtav kod.
+
+### 🟢 Provjereno OK
+Nema SQL injekcije (sve parametrizovano). Svaka akcija ima companyId guard. createAdminClient owner-gated. RLS na 21 tabeli. .env.local nije u gitu.
+
+### Build-better / UX predlozi (za kasnije)
+- getCurrentUser() dupliran u 8 fajlova → izvući u lib/auth.ts
+- Inventory učitava svih 1933 reda odjednom → server-side paginacija
+- Login: dodati toggle prikaz lozinke; forma naloga: progress + draft; prazna stanja: dugme "dodaj prvog"
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-02*
