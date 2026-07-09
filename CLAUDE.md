@@ -648,7 +648,14 @@ Forma mjera treba **korekcije +/- cm po svakoj mjeri u odnosu na odabrani šablo
 - Excel sve proizvode i materijale sa cijenama (uvoz dodatnih artikala pored 92 Munro odijela)
 
 ### Status saradnje (Nikolinim riječima, jun 2026)
-"Postavka je dobra, ali ima mnogo da se dorađuje. Daleko je od završenog — tek treba da prođemo kroz to i skrenemo pažnju šta da se uradi drugačije." → Faza 1 je SKELET, slijedi iteracija na detaljima. **Kolega preuzima komunikaciju** umjesto Nikole.
+"Postavka je dobra, ali ima mnogo da se dorađuje. Daleko je od završenog — tek treba da prođemo kroz to i skrenemo pažnju šta da se uradi drugačije." → Faza 1 je SKELET, slijedi iteracija na detaljima.
+
+### ⚡ SPRINT — Aleksandar preuzeo (jul 2026)
+- **Kontakt je sada Aleksandar** (kolega), dok je Nikola na odmoru. Prešli na "ti".
+- **Rok: ~15 dana da se završi cijela aplikacija.**
+- Aleksandar danima testira app, poslao **prvi izveštaj** (feedback sa promjenama — čeka se da stigne Mateju mejlom). Radimo iterativno po njegovim primjedbama: funkcije, dizajn, sve što kaže.
+- **Word dokument** (originalna specifikacija) — Matej ga već ima, to je bila polazna tačka projekta.
+- **Klijenti:** Aleksandar ima spisak na Google Drive spreadsheetu. Šalje Ime/Prezime/Telefon (jedinstveni, jedan po redu, dedup po telefonu). Istorija kupovina = drugi korak (via `addHistoricalPurchase`, treba kolone: datum/artikal/iznos).
 
 ### Stil komunikacije sa klijentom (kako Matej piše Nikoli)
 - **Ekavica, "ti" forma — BEZ persiranja.** (Matej i Nikola su prešli na ti.) Interna komunikacija sa Matejem je jekavica.
