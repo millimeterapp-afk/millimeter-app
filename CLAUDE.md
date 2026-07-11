@@ -719,4 +719,48 @@ Nema SQL injekcije (sve parametrizovano). Svaka akcija ima companyId guard. crea
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-02*
+## 21. ⭐ STVARNI POSLOVNI MODEL (Aleksandar, jul 2026) — NAJVAŽNIJE
+
+Aleksandar (detaljni mejlovi) otkrio da **trenutni model aplikacije NE odgovara stvarnosti**. Ovo je referentna specifikacija za core rework.
+
+### Struktura: PORUDŽBINA → NALOZI → STAVKE (troslojno)
+Trenutna app: jedan nalog = jedna stavka. **POGREŠNO.** Stvarnost:
+```
+PORUDŽBINA (jedna po dolasku klijenta, npr. "oblačenje za svadbu")
+├── NALOG (Munro)            → dvodelno odelo | rok 4-6 nedelja (Munro određuje)
+├── NALOG (domaća proizvodnja) → 2-7 košulja u JEDNOM nalogu | rok 10-15 radnih dana
+├── STAVKA (gotov proizvod)  → cipele Doucals (nema proizvodnje, samo prodaja)
+└── STAVKA (gotov proizvod)  → kravata
+```
+- Jedna porudžbina = više naloga, jedan nalog domaće proizvodnje = više stavki (npr. 7 košulja).
+- Različiti tipovi imaju različit tok i rok.
+
+### Tri tipa artikla (kolona koja se sada zove "Vrsta materijala" = zapravo "Artikal")
+1. **Domaća proizvodnja** — materijal na stanju ili se naruči, uzmu mere → nalog ka NAŠOJ proizvodnji. Rok 10-15 radnih dana.
+2. **Munro** — uzmu mere, naprave nalog → komad stiže napravljen iz Munro fabrike. Može: dvodelno odelo, pantalone, sako, košulja, prsluk, knit, obuća, aksesoar. Rok 4-6 nedelja.
+3. **Gotov proizvod / usluga** — partneri: Gran Sasso (majice, patike, prsluci), Falke (čarape, majice), Doucals (obuća); nepokupljeni Munro artikli; aksesoari (kravate, maramice, dugmad).
+Svi artikli postoje u kasi (Fusion Octopos) — opcije povlačiti iz kase ILI Aleksandar dokumentuje kad dođe vrijeme za module.
+
+### Avans / plaćanje (app PRATI, ne mijenja kasu)
+- Pri naručivanju: klijent plaća ~50% ukupne sume svega naručenog. Kuca se kroz kasu kao **Avans** (ne kao artikal).
+- Pri preuzimanju (nakon korekcija): plaća ostatak do punog iznosa → fiskalni račun.
+- Varijante: pun iznos odmah (avans na pun, fiskalni sa doplatom 0); plaćanje iz više puta (avansi se **ulančavaju** — prvi pri naručivanju, drugi na probi, ostatak pri preuzimanju).
+- **Fiskalizacija/kasa OSTAJU kod njih** (van skopa). App samo prati iznose: avans, ostatak, ko koliko duguje.
+
+### Tok statusa (domaća proizvodnja košulje — Aleksandarov predlog, nazivi TBD)
+1. **Naručeno** — klijent bira materijal u radnji
+2. **Čeka se materijal** (opciono) — ako nema na stanju, naručuje se od partnera
+3. **Napraviti nalog** (međukorak) — sprječava da se nalog zaboravi dok se ne pošalje proizvodnji
+4. **Izrada** — nalog u proizvodnji
+5. **Gotova košulja** — signal radnji da je gotova
+6. **U radnji** — stigla u radnju (svih 5 u radnji vide status bez zvanja proizvodnje)
+7. Proba: **Preuzeta košulja** (ok) ILI **Korekcija** (nazad u proizvodnju → petlja na korak Izrada)
+**Zašto je ovo srce app-a:** jun = ~200 košulja, 5 ljudi u radnji, niko ne zna dokle je šta → stalno zvanje proizvodnje. Jasan status svima = glavna vrijednost.
+Aleksandar šalje isti ovakav tok za Munro i gotov proizvod (čeka se).
+
+### Šta ovo znači za razvoj — CORE REWORK
+Model naloga se mora preraditi: **nova hijerarhija porudžbina→nalozi→stavke + bogatiji status enum po tipu naloga.** Ovo je glavni posao sprinta, ne "korisničke uloge". Schema promjena (nova parent tabela porudžbine, stavke kao djeca naloga, statusi po tipu).
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-09*
