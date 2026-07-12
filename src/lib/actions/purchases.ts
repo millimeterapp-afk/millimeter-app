@@ -98,75 +98,94 @@ export async function createPurchase(data: NewPurchase) {
     0
   );
   const avans = data.avansAmount ?? 0;
+  if (!Number.isFinite(avans) || avans < 0) throw new Error("Avans mora biti broj ≥ 0.");
+  if (avans > purchaseTotal) throw new Error("Avans ne može biti veći od ukupne sume porudžbine.");
   const paymentStatus = avans >= purchaseTotal && purchaseTotal > 0 ? "paid" : avans > 0 ? "avans" : "unpaid";
 
-  // — Porudžbina —
+  // Aktivne mere klijenta — snapshot za krojački nalog (domaća/munro).
+  // Bez ovoga štampani nalog za krojača nema mere.
+  const activeMeasurement = await db.query.customerMeasurements.findFirst({
+    where: (m, { eq, and }) => and(eq(m.customerId, data.customerId), eq(m.isActive, true)),
+  });
+  const measurementSnapshot = (activeMeasurement?.data as Record<string, unknown> | undefined) ?? null;
+
+  // Brojevi iz sekvenci — pre transakcije (sekvence ionako nisu transakcione)
   const purchaseNumber = await nextPurchaseNumber();
-  const [purchase] = await db.insert(purchases).values({
-    companyId,
-    purchaseNumber,
-    customerId: data.customerId,
-    createdBy: user.id,
-    totalAmount: String(purchaseTotal),
-    avansAmount: String(avans),
-    paidAmount: String(avans),
-    paymentStatus,
-    status: "open",
-    notes: data.notes || null,
-  }).returning();
+  const nalogNumbers: string[] = [];
+  for (let i = 0; i < data.nalozi.length; i++) nalogNumbers.push(await nextNalogNumber());
 
-  // — Nalozi + stavke —
+  // — Sve u jednoj transakciji: porudžbina + nalozi + stavke + avans —
+  // Ako bilo šta pukne, ništa ne ostaje u bazi (nema porudžbine bez naloga).
   let hasMunro = false;
-  for (const n of data.nalozi) {
-    if (n.orderKind === "munro") hasMunro = true;
-    const nalogTotal = n.items.reduce((s, it) => s + (it.unitPrice ?? 0) * (it.quantity ?? 1), 0);
-    const orderNumber = await nextNalogNumber();
-
-    const [order] = await db.insert(orders).values({
+  const purchase = await db.transaction(async (tx) => {
+    const [p] = await tx.insert(purchases).values({
       companyId,
-      orderNumber,
+      purchaseNumber,
       customerId: data.customerId,
-      purchaseId: purchase.id,
-      orderKind: n.orderKind,
-      nalogStatus: "naruceno",
-      productionFlow: n.orderKind === "munro" ? "munro" : "millimeter",
-      dueDate: n.dueDate || null,
-      totalAmount: String(nalogTotal),
-      notes: n.notes || null,
       createdBy: user.id,
+      totalAmount: String(purchaseTotal),
+      avansAmount: String(avans),
+      paidAmount: String(avans),
+      paymentStatus,
+      status: "open",
+      notes: data.notes || null,
     }).returning();
 
-    const itemsToInsert = n.items.map((it) => ({
-      orderId: order.id,
-      artikal: it.artikal.trim(),
-      quantity: it.quantity ?? 1,
-      unitPrice: String(it.unitPrice ?? 0),
-      totalPrice: String((it.unitPrice ?? 0) * (it.quantity ?? 1)),
-      material: it.material || null,
-      templateNumber: it.templateNumber || null,
-      collarType: it.collarType || null,
-      cuffType: it.cuffType || null,
-      fitType: it.fitType || null,
-      measurementSnapshot: it.measurementSnapshot ?? null,
-      monogramData: it.monogramData ?? null,
-    }));
-    await db.insert(orderItems).values(itemsToInsert);
-  }
+    for (let i = 0; i < data.nalozi.length; i++) {
+      const n = data.nalozi[i];
+      if (n.orderKind === "munro") hasMunro = true;
+      const nalogTotal = n.items.reduce((s, it) => s + (it.unitPrice ?? 0) * (it.quantity ?? 1), 0);
 
-  // — Avans kao uplata —
-  if (avans > 0) {
-    await db.insert(payments).values({
-      companyId,
-      referenceType: "purchase",
-      referenceId: purchase.id,
-      customerId: data.customerId,
-      amount: String(avans),
-      paymentMethod: data.paymentMethod ?? "cash",
-      paymentDate: new Date().toISOString().split("T")[0],
-      notes: "Avans pri naručivanju",
-      createdBy: user.id,
-    });
-  }
+      const [order] = await tx.insert(orders).values({
+        companyId,
+        orderNumber: nalogNumbers[i],
+        customerId: data.customerId,
+        purchaseId: p.id,
+        orderKind: n.orderKind,
+        nalogStatus: "naruceno",
+        productionFlow: n.orderKind === "munro" ? "munro" : "millimeter",
+        dueDate: n.dueDate || null,
+        totalAmount: String(nalogTotal),
+        notes: n.notes || null,
+        createdBy: user.id,
+        // Mere idu uz naloge koji se šiju, ne uz gotovu robu
+        measurementSnapshot: n.orderKind !== "gotov" ? measurementSnapshot : null,
+      }).returning();
+
+      const itemsToInsert = n.items.map((it) => ({
+        orderId: order.id,
+        artikal: it.artikal.trim(),
+        quantity: it.quantity ?? 1,
+        unitPrice: String(it.unitPrice ?? 0),
+        totalPrice: String((it.unitPrice ?? 0) * (it.quantity ?? 1)),
+        material: it.material || null,
+        templateNumber: it.templateNumber || null,
+        collarType: it.collarType || null,
+        cuffType: it.cuffType || null,
+        fitType: it.fitType || null,
+        measurementSnapshot: it.measurementSnapshot ?? null,
+        monogramData: it.monogramData ?? null,
+      }));
+      await tx.insert(orderItems).values(itemsToInsert);
+    }
+
+    // — Avans kao uplata —
+    if (avans > 0) {
+      await tx.insert(payments).values({
+        companyId,
+        referenceType: "purchase",
+        referenceId: p.id,
+        customerId: data.customerId,
+        amount: String(avans),
+        paymentMethod: data.paymentMethod ?? "cash",
+        paymentDate: new Date().toISOString().split("T")[0],
+        notes: "Avans pri naručivanju",
+        createdBy: user.id,
+      });
+    }
+
+    return p;
+  });
 
   // — Munro sync (best effort, ne blokira) —
   if (hasMunro) {
@@ -244,13 +263,16 @@ export async function getPurchase(id: string) {
 }
 
 // ─── updateNalogStatus — pomjeri nalog kroz tok ───────────────────────────────
-export async function updateNalogStatus(
-  nalogId: string,
-  status:
-    | "naruceno" | "ceka_materijal" | "za_izradu" | "izrada"
-    | "gotovo" | "u_radnji" | "preuzeto" | "korekcija" | "otkazano"
-) {
+const NALOG_STATUSES = [
+  "naruceno", "ceka_materijal", "za_izradu", "izrada",
+  "gotovo", "u_radnji", "preuzeto", "korekcija", "otkazano",
+] as const;
+type NalogStatusValue = (typeof NALOG_STATUSES)[number];
+
+export async function updateNalogStatus(nalogId: string, status: NalogStatusValue) {
   const { dbUser } = await getCurrentUser();
+  // Runtime provjera — TypeScript tip ne štiti od ručno pozvane server akcije
+  if (!NALOG_STATUSES.includes(status)) throw new Error("Nepoznat status naloga.");
   await db.update(orders)
     .set({ nalogStatus: status, updatedAt: new Date() })
     .where(and(eq(orders.id, nalogId), eq(orders.companyId, dbUser.companyId!)));
@@ -273,24 +295,30 @@ export async function addPurchasePayment(
   });
   if (!purchase) throw new Error("Porudžbina nije pronađena.");
 
-  await db.insert(payments).values({
-    companyId,
-    referenceType: "purchase",
-    referenceId: purchaseId,
-    customerId: purchase.customerId,
-    amount: String(amount),
-    paymentMethod: method,
-    paymentDate: new Date().toISOString().split("T")[0],
-    createdBy: user.id,
+  // Transakcija + atomski increment (dvije istovremene uplate se ne gube)
+  await db.transaction(async (tx) => {
+    await tx.insert(payments).values({
+      companyId,
+      referenceType: "purchase",
+      referenceId: purchaseId,
+      customerId: purchase.customerId,
+      amount: String(amount),
+      paymentMethod: method,
+      paymentDate: new Date().toISOString().split("T")[0],
+      createdBy: user.id,
+    });
+
+    await tx.update(purchases)
+      .set({
+        paidAmount: sql`paid_amount + ${amount}`,
+        paymentStatus: sql`CASE
+          WHEN paid_amount + ${amount} >= total_amount AND total_amount > 0 THEN 'paid'
+          WHEN paid_amount + ${amount} > 0 THEN 'avans'
+          ELSE 'unpaid' END`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(purchases.id, purchaseId), eq(purchases.companyId, companyId)));
   });
-
-  const newPaid = Number(purchase.paidAmount) + amount;
-  const total = Number(purchase.totalAmount);
-  const paymentStatus = newPaid >= total && total > 0 ? "paid" : newPaid > 0 ? "avans" : "unpaid";
-
-  await db.update(purchases)
-    .set({ paidAmount: String(newPaid), paymentStatus, updatedAt: new Date() })
-    .where(eq(purchases.id, purchaseId));
 
   revalidatePath("/orders");
 }

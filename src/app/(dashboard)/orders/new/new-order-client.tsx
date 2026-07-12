@@ -76,6 +76,7 @@ export function NewOrderClient({
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(preselectedCustomerId ? 1 : 0);
   const [customerId, setCustomerId] = useState(preselectedCustomerId);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [nalozi, setNalozi] = useState<Nalog[]>([emptyNalog()]);
   const [avans, setAvans] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("cash");
@@ -84,6 +85,14 @@ export function NewOrderClient({
 
   const selectedCustomer = customers.find((c) => c.id === customerId);
   const fabrics = materials.filter((m) => m.category === "Tkanina" || m.category === "Postava");
+
+  // Pretraga klijenata (ime, prezime, telefon) — bez nje je korak 1
+  // neupotrebljiv kad se uveze pun spisak klijenata
+  const q = customerSearch.trim().toLowerCase();
+  const filteredCustomers = q
+    ? customers.filter((c) =>
+        `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) || (c.phone ?? "").includes(q))
+    : customers;
 
   // — Izračun ukupne sume —
   const total = useMemo(
@@ -179,8 +188,15 @@ export function NewOrderClient({
               <Link href="/customers" className="text-sm text-black underline mt-1 inline-block">Dodaj klijenta →</Link>
             </div>
           )}
+          {customers.length > 0 && (
+            <Input value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)}
+              placeholder="Pretraži po imenu ili telefonu..." autoFocus />
+          )}
           <div className="space-y-2 max-h-80 overflow-y-auto">
-            {customers.map((c) => (
+            {filteredCustomers.length === 0 && q && (
+              <p className="text-sm text-muted-foreground text-center py-4">Nema rezultata za &quot;{customerSearch}&quot;</p>
+            )}
+            {filteredCustomers.slice(0, 50).map((c) => (
               <button key={c.id} onClick={() => setCustomerId(c.id)}
                 className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border transition-colors
                   ${customerId === c.id ? "border-black bg-black/5" : "border-transparent hover:bg-muted/50"}`}>
@@ -194,6 +210,11 @@ export function NewOrderClient({
                 {customerId === c.id && <Check className="w-4 h-4 ml-auto text-black" />}
               </button>
             ))}
+            {filteredCustomers.length > 50 && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Prikazano prvih 50 — suzi pretragu
+              </p>
+            )}
           </div>
         </div>
       )}

@@ -287,6 +287,41 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
       order.fitType    ? `Fit: <strong>${order.fitType}</strong>`         : null,
     ].filter(Boolean).join(" &nbsp;·&nbsp; ");
 
+    // Novi model: naslov i tabela stavki iz order_items
+    const printTitle = order.item
+      ?? (order.items.length === 1
+        ? order.items[0].artikal
+        : order.items.length > 1
+          ? `${order.items.length} stavki — ${kindLabels[order.orderKind] ?? "nalog"}`
+          : "Nalog");
+    const itemRows = order.items.map((it) => {
+      const mono = it.monogramData as { pozicija?: string; boja?: string; font?: string } | null;
+      const detalji = [
+        it.material ? `Mat: ${it.material}` : null,
+        it.collarType ? `Kragla: ${it.collarType}` : null,
+        it.cuffType ? `Manž: ${it.cuffType}` : null,
+        it.templateNumber ? `Šablon: ${it.templateNumber}` : null,
+        mono?.pozicija ? `Inicijali: ${mono.pozicija}${mono.boja ? `, ${mono.boja}` : ""}${mono.font ? `, ${mono.font}` : ""}` : null,
+      ].filter(Boolean).join(" · ");
+      return `<tr>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:600">${it.artikal}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:11px;color:#555">${detalji || "—"}</td>
+      </tr>`;
+    }).join("");
+    const itemsSection = order.items.length > 0 ? `
+<div class="meas-section">
+  <div class="meas-title">Stavke naloga (${order.items.length})</div>
+  <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    <thead><tr>
+      <th style="text-align:left;padding:4px 8px;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#999">Artikal</th>
+      <th style="text-align:center;padding:4px 8px;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#999">Kol.</th>
+      <th style="text-align:left;padding:4px 8px;font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:#999">Detalji</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+</div>` : "";
+
     w.document.write(`<!DOCTYPE html>
 <html lang="sr"><head>
 <meta charset="UTF-8">
@@ -361,9 +396,11 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
 </div>
 
 <div class="title-bar">
-  <h1>${order.item ?? "Nalog"}</h1>
+  <h1>${printTitle}</h1>
   <div class="due">Rok isporuke: <strong>${order.dueDate ?? "nije određen"}</strong></div>
 </div>
+
+${itemsSection}
 
 <div class="info-grid">
   <div class="card">
