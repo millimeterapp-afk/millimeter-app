@@ -1,5 +1,4 @@
-import { getOrders } from "@/lib/actions/orders";
-import { getCustomers } from "@/lib/actions/customers";
+import { getNalozi } from "@/lib/actions/purchases";
 import { OrdersClient } from "./orders-client";
 
 export default async function OrdersPage({
@@ -7,10 +6,9 @@ export default async function OrdersPage({
 }: {
   searchParams: Promise<{ filter?: string }>;
 }) {
-  const [orders, customers, params] = await Promise.all([
-    getOrders(),
-    getCustomers(),
+  const [nalozi, params] = await Promise.all([
+    getNalozi(),
     searchParams,
   ]);
-  return <OrdersClient orders={orders} customers={customers} initialFilter={params.filter} />;
+  return <OrdersClient nalozi={nalozi} initialFilter={params.filter} />;
 }

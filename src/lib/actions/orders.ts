@@ -49,6 +49,8 @@ export async function getOrder(id: string) {
           },
         },
       },
+      items: true,
+      purchase: true,
       corrections: {
         orderBy: (c, { desc }) => [desc(c.createdAt)],
       },

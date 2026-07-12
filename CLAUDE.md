@@ -771,4 +771,29 @@ Model naloga se mora preraditi: **nova hijerarhija porudžbina→nalozi→stavke
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-09*
+## 22. Faza 2+3 — Novi model IMPLEMENTIRAN (2026-07-12)
+
+### ✅ Schema (Faza 2)
+- `purchases` (porudžbina, parent) + `order_items` (stavke, djeca naloga) dodate.
+- `orders` dobio `purchaseId`, `orderKind` (enum `domaca|munro|gotov`), `nalogStatus` (enum: naruceno, ceka_materijal, za_izradu, izrada, gotovo, u_radnji, preuzeto, korekcija, otkazano).
+- Sekvence `purchase_number_seq` / `nalog_number_seq` (atomarno, bez race-a). Brojevi: `POR-YYYY-####`, `NAL-YYYY-####`.
+- RLS potvrđen: orders/purchases/order_items imaju `company_isolation` (order_items kroz EXISTS na orders). Provjereno 2026-07-12.
+
+### ✅ Server actions — `src/lib/actions/purchases.ts`
+`createPurchase` (validacija server-side, provjera da klijent pripada firmi, avans kao uplata, Munro sync), `getPurchases`, `getPurchase`, `getNalozi` (lista, sa customer+items+purchase), `getNaloziForProduction` (aktivni, bez preuzeto/otkazano), `updateNalogStatus`, `addPurchasePayment` (naplata na nivou porudžbine).
+
+### ✅ UI (Faza 3) — sve prebačeno na novi model, build zelen
+- **Novi nalog** (`/orders/new`): wizard Klijent → Nalozi (3 tipa, više stavki, krojački detalji) → Avans (50% shortcut).
+- **Lista naloga** (`/orders`): kolone Tip (orderKind) + Status (nalogStatus), artikli iz stavki, tabovi po fazi + Kasni/Neplaćeni.
+- **Detalj naloga** (`/orders/[id]`): kartica "Stavke naloga", kontrola "Faza izrade" (nalogStatus), naplata svjesna porudžbine (avans pokriva sve naloge). Stari lifecycle stepper i dalje vidljiv (pogoni rezervaciju materijala + statistiku klijenta).
+- **Produkcija** (`/production`): Kanban po `nalogStatus` (6 kolona + korekcija strip), pomjeranje kroz faze `updateNalogStatus`.
+- **Dashboard / Reports / Profil klijenta**: KPI i istorija na `nalogStatus`/`orderKind`; naplaćeno dedup po porudžbini.
+
+### ⚠️ Poznati follow-up (Faza 2.5 — poslovna logika, ne UI)
+**Dva statusna sistema koegzistiraju.** Stari `orders.status` (draft→delivered) pogoni rezervaciju materijala i `customer.totalSpent`/loyalty na "delivered". Novi `nalogStatus` je operativni traker koji radnici koriste. Za nove naloge (kroz `createPurchase`) radnici koriste **Faza izrade** (nalogStatus) → pa se `totalSpent`/loyalty i rezervacija materijala NE okidaju automatski na "preuzeto".
+- **Treba:** okinuti statistiku klijenta + materijal iz `updateNalogStatus` kad nalog ide u "preuzeto" (pažljivo: porudžbina ima više naloga — ne duplirati visitCount; novac ide iz `purchase.paidAmount`).
+- **Blokira:** čeka Aleksandra da potvrdi tačne nazive/tok statusa za Munro i gotov proizvod (nazivi nalogStatus su naš predlog, TBD). Tek onda finalizovati pravila status→novac.
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-12*

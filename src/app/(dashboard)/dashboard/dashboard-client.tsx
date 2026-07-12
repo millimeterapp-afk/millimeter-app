@@ -1,24 +1,48 @@
-﻿"use client";
+"use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { TrendingUp, Users, ClipboardList, AlertCircle, Scissors, CheckCircle2, ArrowUpRight, CalendarDays, Clock } from "lucide-react";
 import Link from "next/link";
-import type { Order, Customer, ProductionTask, Correction, Appointment } from "@/lib/db/schema";
+import type { Order, Customer, OrderItem, Purchase, Correction, Appointment } from "@/lib/db/schema";
 
-const statusColors: Record<string, string> = {
-  confirmed: "bg-blue-100 text-blue-800",
-  in_production: "bg-yellow-100 text-yellow-800",
-  ready: "bg-green-100 text-green-800",
-  delivered: "bg-gray-100 text-gray-600",
+type Nalog = Order & {
+  customer: Customer | null;
+  items: OrderItem[];
+  purchase: Purchase | null;
 };
 
-const statusLabels: Record<string, string> = {
-  confirmed: "Potvrđen",
-  in_production: "U produkciji",
-  ready: "Gotov",
-  delivered: "Isporučen",
+const nalogStatusColors: Record<string, string> = {
+  naruceno: "bg-gray-100 text-gray-700",
+  ceka_materijal: "bg-amber-100 text-amber-800",
+  za_izradu: "bg-sky-100 text-sky-800",
+  izrada: "bg-yellow-100 text-yellow-800",
+  gotovo: "bg-green-100 text-green-800",
+  u_radnji: "bg-teal-100 text-teal-800",
+  preuzeto: "bg-gray-100 text-gray-500",
+  korekcija: "bg-orange-100 text-orange-800",
+  otkazano: "bg-red-100 text-red-700",
 };
+const nalogStatusLabels: Record<string, string> = {
+  naruceno: "Naručeno",
+  ceka_materijal: "Čeka materijal",
+  za_izradu: "Za izradu",
+  izrada: "U izradi",
+  gotovo: "Gotovo",
+  u_radnji: "U radnji",
+  preuzeto: "Preuzeto",
+  korekcija: "Korekcija",
+  otkazano: "Otkazano",
+};
+
+function artikliText(n: Nalog): string {
+  if (n.items.length > 0) {
+    const names = n.items.map((it) => (it.quantity && it.quantity > 1 ? `${it.artikal} ×${it.quantity}` : it.artikal));
+    if (names.length <= 2) return names.join(", ");
+    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  }
+  return n.item ?? "—";
+}
 
 const now = new Date();
 const monthName = now.toLocaleString("sr-Latn", { month: "long", year: "numeric" });
@@ -31,38 +55,56 @@ const typeLabels: Record<string, string> = {
 };
 
 export function DashboardClient({
-  orders, customers, tasks, corrections, todayAppointments,
+  nalozi, customers, corrections, todayAppointments,
 }: {
-  orders: Order[];
+  nalozi: Nalog[];
   customers: Customer[];
-  tasks: { status: string }[];
   corrections: Correction[];
   todayAppointments: AppointmentWithCustomer[];
 }) {
-  const activeOrders = orders.filter(o => !["delivered", "cancelled"].includes(o.status));
-  const inProduction = orders.filter(o => o.status === "in_production");
-  const unpaidOrders = orders.filter(o => o.paymentStatus !== "paid" && o.status !== "cancelled");
-  const unpaidAmount = unpaidOrders.reduce((sum, o) => sum + Number(o.totalAmount) - Number(o.paidAmount), 0);
-  const deliveredCount = orders.filter(o => o.status === "delivered").length;
+  const activeNalozi = nalozi.filter((n) => !["preuzeto", "otkazano"].includes(n.nalogStatus));
+  const inIzrada = nalozi.filter((n) => n.nalogStatus === "izrada");
+  const preuzetoCount = nalozi.filter((n) => n.nalogStatus === "preuzeto").length;
+
+  // Naplata: avans/plaćanje se vodi na nivou porudžbine — dedupliramo porudžbine
+  // da ne bismo brojali isti ostatak više puta (svadba = 1 porudžbina, više naloga).
+  const seenPurchases = new Set<string>();
+  let unpaidAmount = 0;
+  let unpaidCount = 0;
+  const revenueByMonth: Record<string, number> = {};
+  let thisMonthRevenue = 0;
+
+  const addRevenue = (date: Date, amount: number) => {
+    if (amount <= 0) return;
+    const month = date.toLocaleString("sr-Latn", { month: "short" });
+    revenueByMonth[month] = (revenueByMonth[month] ?? 0) + amount;
+    if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
+      thisMonthRevenue += amount;
+    }
+  };
+
+  for (const n of nalozi) {
+    if (n.nalogStatus === "otkazano") continue;
+    if (n.purchase) {
+      if (seenPurchases.has(n.purchase.id)) continue;
+      seenPurchases.add(n.purchase.id);
+      const total = Number(n.purchase.totalAmount);
+      const paid = Number(n.purchase.paidAmount);
+      const rem = total - paid;
+      if (rem > 0.005) { unpaidAmount += rem; unpaidCount++; }
+      addRevenue(new Date(n.purchase.createdAt), paid);
+    } else {
+      const rem = Number(n.totalAmount) - Number(n.paidAmount);
+      if (n.paymentStatus !== "paid" && rem > 0.005) { unpaidAmount += rem; unpaidCount++; }
+      addRevenue(new Date(n.createdAt), Number(n.paidAmount));
+    }
+  }
+
+  const chartData = Object.entries(revenueByMonth).map(([month, prihod]) => ({ month, prihod }));
 
   const topCustomers = [...customers]
     .sort((a, b) => Number(b.totalSpent) - Number(a.totalSpent))
     .slice(0, 3);
-
-  // Revenue by month from real orders
-  const revenueByMonth: Record<string, number> = {};
-  orders.filter(o => o.status === "delivered").forEach(o => {
-    const month = new Date(o.createdAt).toLocaleString("sr-Latn", { month: "short" });
-    revenueByMonth[month] = (revenueByMonth[month] ?? 0) + Number(o.totalAmount);
-  });
-  const chartData = Object.entries(revenueByMonth).map(([month, prihod]) => ({ month, prihod }));
-
-  const thisMonthRevenue = orders
-    .filter(o => {
-      const d = new Date(o.createdAt);
-      return o.status === "delivered" && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    })
-    .reduce((sum, o) => sum + Number(o.totalAmount), 0);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -77,8 +119,8 @@ export function DashboardClient({
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Prihod ovog meseca</p>
-                  <p className="text-2xl font-bold mt-1">RSD {thisMonthRevenue.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">Naplaćeno ovog meseca</p>
+                  <p className="text-2xl font-bold mt-1">RSD {Math.round(thisMonthRevenue).toLocaleString()}</p>
                   <p className="text-xs text-green-600 flex items-center gap-1 mt-1"><ArrowUpRight className="w-3 h-3" />iz baze</p>
                 </div>
                 <div className="w-9 h-9 bg-black rounded-md flex items-center justify-center shrink-0">
@@ -95,8 +137,8 @@ export function DashboardClient({
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Aktivni nalozi</p>
-                  <p className="text-2xl font-bold mt-1">{activeOrders.length}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{inProduction.length} u produkciji</p>
+                  <p className="text-2xl font-bold mt-1">{activeNalozi.length}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{inIzrada.length} u izradi</p>
                 </div>
                 <div className="w-9 h-9 bg-yellow-100 rounded-md flex items-center justify-center shrink-0">
                   <ClipboardList className="w-4 h-4 text-yellow-700" />
@@ -113,7 +155,7 @@ export function DashboardClient({
                 <div>
                   <p className="text-sm text-muted-foreground">Nenaplaćeno</p>
                   <p className="text-2xl font-bold mt-1 text-red-600">RSD {Math.round(unpaidAmount).toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{unpaidOrders.length} otvorenih</p>
+                  <p className="text-xs text-muted-foreground mt-1">{unpaidCount} porudžbina</p>
                 </div>
                 <div className="w-9 h-9 bg-red-100 rounded-md flex items-center justify-center shrink-0">
                   <AlertCircle className="w-4 h-4 text-red-600" />
@@ -149,7 +191,7 @@ export function DashboardClient({
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         <Card className="lg:col-span-3">
           <CardHeader>
-            <CardTitle className="text-base">Prihod po mesecima</CardTitle>
+            <CardTitle className="text-base">Naplata po mesecima</CardTitle>
           </CardHeader>
           <CardContent>
             {chartData.length > 0 ? (
@@ -158,13 +200,13 @@ export function DashboardClient({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v) => [`RSD ${v}`, "Prihod"]} contentStyle={{ fontSize: 12 }} />
+                  <Tooltip formatter={(v) => [`RSD ${v}`, "Naplaćeno"]} contentStyle={{ fontSize: 12 }} />
                   <Bar dataKey="prihod" fill="#18181b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
-                Nema isporučenih naloga još uvek
+                Još nema evidentiranih uplata
               </div>
             )}
           </CardContent>
@@ -176,23 +218,23 @@ export function DashboardClient({
             <Link href="/orders" className="text-xs text-muted-foreground hover:underline">Svi →</Link>
           </CardHeader>
           <CardContent className="space-y-2">
-            {activeOrders.slice(0, 4).map((order) => (
-              <Link key={order.id} href={`/orders/${order.id}`}>
+            {activeNalozi.slice(0, 4).map((n) => (
+              <Link key={n.id} href={`/orders/${n.id}`}>
                 <div className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
                   <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0">
                     <Scissors className="w-3.5 h-3.5 text-muted-foreground" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate font-mono">{order.orderNumber}</p>
-                    <p className="text-xs text-muted-foreground truncate">{order.item ?? "—"}</p>
+                    <p className="text-sm font-medium truncate">{artikliText(n)}</p>
+                    <p className="text-xs text-muted-foreground truncate font-mono">{n.orderNumber}</p>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${statusColors[order.status] ?? "bg-gray-100"}`}>
-                    {statusLabels[order.status] ?? order.status}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${nalogStatusColors[n.nalogStatus] ?? "bg-gray-100"}`}>
+                    {nalogStatusLabels[n.nalogStatus] ?? n.nalogStatus}
                   </span>
                 </div>
               </Link>
             ))}
-            {activeOrders.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nema aktivnih naloga</p>}
+            {activeNalozi.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nema aktivnih naloga</p>}
           </CardContent>
         </Card>
       </div>
@@ -205,13 +247,13 @@ export function DashboardClient({
             </CardHeader>
             <CardContent className="space-y-2">
               {[
-                { label: "U radu", value: tasks.filter(t => t.status === "in_progress").length },
-                { label: "Čeka na red", value: tasks.filter(t => t.status === "queued").length },
-                { label: "Gotovi", value: tasks.filter(t => t.status === "done").length },
+                { label: "U izradi", value: nalozi.filter(n => n.nalogStatus === "izrada").length },
+                { label: "Čeka (naručeno / materijal / za izradu)", value: nalozi.filter(n => ["naruceno", "ceka_materijal", "za_izradu"].includes(n.nalogStatus)).length },
+                { label: "Gotovo / u radnji", value: nalozi.filter(n => ["gotovo", "u_radnji"].includes(n.nalogStatus)).length },
               ].map(s => (
                 <div key={s.label} className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{s.label}</span>
-                  <span className="font-medium">{s.value} naloga</span>
+                  <span className="font-medium shrink-0 ml-2">{s.value}</span>
                 </div>
               ))}
               <div className="text-center text-xs text-muted-foreground mt-3 pt-3 border-t">
@@ -226,9 +268,9 @@ export function DashboardClient({
             <CardTitle className="text-base flex items-center gap-2"><CheckCircle2 className="w-4 h-4" />Pregled</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Link href="/orders?filter=delivered" className="flex justify-between text-sm hover:underline">
-              <span className="text-muted-foreground">Isporučenih naloga</span>
-              <span className="font-medium">{deliveredCount}</span>
+            <Link href="/orders?filter=preuzeto" className="flex justify-between text-sm hover:underline">
+              <span className="text-muted-foreground">Preuzetih naloga</span>
+              <span className="font-medium">{preuzetoCount}</span>
             </Link>
             <Link href="/corrections" className="flex justify-between text-sm hover:underline">
               <span className="text-muted-foreground">Otvorenih korekcija</span>

@@ -11,12 +11,21 @@ import type { Order, Customer, Correction } from "@/lib/db/schema";
 const COLORS = ["#18181b", "#52525b", "#a1a1aa", "#d4d4d8", "#e4e4e7"];
 
 const statusLabels: Record<string, string> = {
-  draft: "Draft",
-  confirmed: "Potvrđen",
-  in_production: "U produkciji",
-  ready: "Gotov",
-  delivered: "Isporučen",
-  cancelled: "Otkazan",
+  naruceno: "Naručeno",
+  ceka_materijal: "Čeka materijal",
+  za_izradu: "Za izradu",
+  izrada: "U izradi",
+  gotovo: "Gotovo",
+  u_radnji: "U radnji",
+  preuzeto: "Preuzeto",
+  korekcija: "Korekcija",
+  otkazano: "Otkazano",
+};
+
+const kindLabels: Record<string, string> = {
+  domaca: "Domaća izrada",
+  munro: "Munro",
+  gotov: "Gotov proizvod",
 };
 
 const tierColors: Record<string, string> = {
@@ -35,10 +44,10 @@ export function ReportsClient({
   customers: Customer[];
   corrections: Correction[];
 }) {
-  // Prihod po mesecima iz isporučenih naloga
+  // Prihod po mesecima iz preuzetih (završenih) naloga
   const revenueByMonth: Record<string, number> = {};
   orders
-    .filter((o) => o.status === "delivered")
+    .filter((o) => o.nalogStatus === "preuzeto")
     .forEach((o) => {
       const month = new Date(o.createdAt).toLocaleString("sr-Latn", { month: "short", year: "2-digit" });
       revenueByMonth[month] = (revenueByMonth[month] ?? 0) + Number(o.totalAmount);
@@ -49,9 +58,9 @@ export function ReportsClient({
   const avgMonthly = chartData.length > 0 ? Math.round(totalRevenue / chartData.length) : 0;
   const bestMonth = chartData.length > 0 ? chartData.reduce((a, b) => a.prihod > b.prihod ? a : b) : null;
 
-  // Nalozi po statusu
+  // Nalozi po statusu (faza izrade)
   const statusCounts = orders.reduce<Record<string, number>>((acc, o) => {
-    acc[o.status] = (acc[o.status] ?? 0) + 1;
+    acc[o.nalogStatus] = (acc[o.nalogStatus] ?? 0) + 1;
     return acc;
   }, {});
   const ordersByStatus = Object.entries(statusCounts)
@@ -59,9 +68,9 @@ export function ReportsClient({
     .filter((o) => o.value > 0)
     .sort((a, b) => b.value - a.value);
 
-  // Nalozi po tipu
+  // Nalozi po tipu (Artikal: domaća / munro / gotov)
   const typeCounts = orders.reduce<Record<string, number>>((acc, o) => {
-    const label = o.orderType === "custom" ? "Po meri" : o.orderType === "ready_made" ? "Gotova roba" : "Korekcija";
+    const label = kindLabels[o.orderKind] ?? o.orderKind;
     acc[label] = (acc[label] ?? 0) + 1;
     return acc;
   }, {});
@@ -129,7 +138,7 @@ export function ReportsClient({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Prihod po mesecima (isporučeni nalozi)</CardTitle>
+            <CardTitle className="text-base">Prihod po mesecima (preuzeti nalozi)</CardTitle>
           </CardHeader>
           <CardContent>
             {chartData.length > 0 ? (
@@ -144,7 +153,7 @@ export function ReportsClient({
               </ResponsiveContainer>
             ) : (
               <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
-                Nema isporučenih naloga još
+                Nema preuzetih naloga još
               </div>
             )}
           </CardContent>

@@ -3,18 +3,57 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateOrderStatus, updateOrderPayment, updateOrder } from "@/lib/actions/orders";
+import { updateNalogStatus, addPurchasePayment } from "@/lib/actions/purchases";
 import { createCorrection } from "@/lib/actions/corrections";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, User, Printer, Check, CreditCard, AlertCircle, X, Wrench, Pencil, ExternalLink, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import type { Order, Customer, CustomerMeasurement, Correction } from "@/lib/db/schema";
+import type { Order, Customer, CustomerMeasurement, Correction, OrderItem, Purchase } from "@/lib/db/schema";
 import type { GoCreateOrder } from "@/lib/gocreate";
 
 type OrderWithDetails = Order & {
   customer: (Customer & { measurements: CustomerMeasurement[] }) | null;
   corrections: Correction[];
+  items: OrderItem[];
+  purchase: Purchase | null;
+};
+
+// ─── Faza izrade (nalogStatus) — detaljni tok kroz radionicu ──────────────────
+const NALOG_STATUS_FLOW = [
+  "naruceno", "ceka_materijal", "za_izradu", "izrada",
+  "gotovo", "u_radnji", "preuzeto",
+] as const;
+type NalogStatus =
+  | "naruceno" | "ceka_materijal" | "za_izradu" | "izrada"
+  | "gotovo" | "u_radnji" | "preuzeto" | "korekcija" | "otkazano";
+const nalogStatusLabels: Record<string, string> = {
+  naruceno: "Naručeno",
+  ceka_materijal: "Čeka materijal",
+  za_izradu: "Za izradu",
+  izrada: "U izradi",
+  gotovo: "Gotovo",
+  u_radnji: "U radnji",
+  preuzeto: "Preuzeto",
+  korekcija: "Korekcija",
+  otkazano: "Otkazano",
+};
+const nalogStatusColors: Record<string, string> = {
+  naruceno: "bg-gray-100 text-gray-700",
+  ceka_materijal: "bg-amber-100 text-amber-800",
+  za_izradu: "bg-sky-100 text-sky-800",
+  izrada: "bg-yellow-100 text-yellow-800",
+  gotovo: "bg-green-100 text-green-800",
+  u_radnji: "bg-teal-100 text-teal-800",
+  preuzeto: "bg-gray-100 text-gray-500",
+  korekcija: "bg-orange-100 text-orange-800",
+  otkazano: "bg-red-100 text-red-700",
+};
+const kindLabels: Record<string, string> = {
+  domaca: "Domaća izrada",
+  munro: "Munro",
+  gotov: "Gotov proizvod",
 };
 
 const statusFlow = [
@@ -93,8 +132,14 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
   const currentStepIndex = statusFlow.findIndex(s => s.id === order.status);
   const nextStatus = nextStatusMap[order.status];
   const totalAmount = Number(order.totalAmount);
-  const paidAmount = Number(order.paidAmount);
-  const remaining = totalAmount - paidAmount;
+
+  // Plaćanje: ako nalog pripada porudžbini, avans/naplata se vode na nivou
+  // porudžbine (jedan avans pokriva sve naloge). Inače — po nalogu (stari model).
+  const hasPurchase = !!order.purchase;
+  const payTotal = hasPurchase ? Number(order.purchase!.totalAmount) : totalAmount;
+  const payPaid = hasPurchase ? Number(order.purchase!.paidAmount) : Number(order.paidAmount);
+  const remaining = payTotal - payPaid;
+  const payStatus = hasPurchase ? order.purchase!.paymentStatus : order.paymentStatus;
 
   const handleStatusChange = () => {
     if (!nextStatus) return;
@@ -140,13 +185,29 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
     });
   };
 
+  const handleNalogStatusChange = (status: NalogStatus) => {
+    setActionError("");
+    startTransition(async () => {
+      try {
+        await updateNalogStatus(order.id, status);
+        router.refresh();
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Greška pri promjeni faze izrade.");
+      }
+    });
+  };
+
   const handlePayment = () => {
     const amount = Number(payAmount);
     if (!amount || amount <= 0) return;
     setActionError("");
     startTransition(async () => {
       try {
-        await updateOrderPayment(order.id, Math.min(paidAmount + amount, totalAmount), totalAmount);
+        if (hasPurchase) {
+          await addPurchasePayment(order.purchase!.id, amount, payMethod as "cash" | "card" | "transfer");
+        } else {
+          await updateOrderPayment(order.id, Math.min(payPaid + amount, payTotal), payTotal);
+        }
         setShowPayment(false);
         setPayAmount("");
         router.refresh();
@@ -537,12 +598,16 @@ ${order.notes ? `
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-semibold">{order.item ?? "Nalog"}</h1>
-            <span className={`text-sm px-3 py-1 rounded-full font-medium ${statusColors[order.status] ?? "bg-gray-100"}`}>
-              {statusFlow.find(s => s.id === order.status)?.label ?? order.status}
+            <h1 className="text-2xl font-semibold">{order.item ?? order.items[0]?.artikal ?? kindLabels[order.orderKind] ?? "Nalog"}</h1>
+            <span className="text-xs px-2 py-0.5 rounded bg-muted font-medium">{kindLabels[order.orderKind] ?? order.orderKind}</span>
+            <span className={`text-sm px-3 py-1 rounded-full font-medium ${nalogStatusColors[order.nalogStatus] ?? "bg-gray-100"}`}>
+              {nalogStatusLabels[order.nalogStatus] ?? order.nalogStatus}
             </span>
           </div>
-          <p className="text-muted-foreground text-sm mt-1 font-mono">{order.orderNumber}</p>
+          <p className="text-muted-foreground text-sm mt-1 font-mono">
+            {order.orderNumber}
+            {order.purchase && <> · <span className="text-muted-foreground">porudžbina {order.purchase.purchaseNumber}</span></>}
+          </p>
         </div>
         <div className="flex gap-2 shrink-0 flex-wrap">
           {order.status !== "delivered" && order.status !== "cancelled" && (
@@ -603,6 +668,86 @@ ${order.notes ? `
           </div>
         </CardContent>
       </Card>
+
+      {/* Faza izrade — detaljni tok kroz radionicu (nalogStatus) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Faza izrade</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {NALOG_STATUS_FLOW.map((s) => {
+              const active = order.nalogStatus === s;
+              return (
+                <button key={s} onClick={() => handleNalogStatusChange(s)} disabled={isPending || active}
+                  className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors disabled:opacity-100
+                    ${active ? "bg-black text-white" : "bg-muted text-muted-foreground hover:bg-muted/70 disabled:opacity-50"}`}>
+                  {nalogStatusLabels[s]}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1 border-t">
+            {(["korekcija", "otkazano"] as const).map((s) => {
+              const active = order.nalogStatus === s;
+              return (
+                <button key={s} onClick={() => handleNalogStatusChange(s)} disabled={isPending || active}
+                  className={`text-xs px-3 py-1.5 rounded-full font-medium transition-colors
+                    ${active ? (s === "otkazano" ? "bg-red-600 text-white" : "bg-orange-500 text-white")
+                      : "border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"}`}>
+                  {nalogStatusLabels[s]}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Stavke naloga — artikli iz porudžbine */}
+      {order.items.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Stavke naloga ({order.items.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Artikal</th>
+                    <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Detalji</th>
+                    <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">Kol.</th>
+                    <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">Cena</th>
+                    <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">Ukupno</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.items.map((it) => {
+                    const specs = [
+                      it.material ? `Materijal: ${it.material}` : null,
+                      it.collarType ? `Kragla: ${it.collarType}` : null,
+                      it.cuffType ? `Manžetna: ${it.cuffType}` : null,
+                      it.fitType ? `Fit: ${it.fitType}` : null,
+                      it.templateNumber ? `Šablon: ${it.templateNumber}` : null,
+                    ].filter(Boolean).join(" · ");
+                    return (
+                      <tr key={it.id} className="border-b last:border-0">
+                        <td className="px-4 py-2.5 text-sm font-medium">{it.artikal}</td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground">{specs || "—"}</td>
+                        <td className="px-4 py-2.5 text-sm text-right">{it.quantity}</td>
+                        <td className="px-4 py-2.5 text-sm text-right">RSD {Number(it.unitPrice).toLocaleString()}</td>
+                        <td className="px-4 py-2.5 text-sm text-right font-medium">RSD {Number(it.totalPrice).toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-3 gap-4">
         {/* Order details */}
@@ -782,7 +927,7 @@ ${order.notes ? `
         <Card>
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-              <CreditCard className="w-4 h-4" /> Naplata
+              <CreditCard className="w-4 h-4" /> Naplata{hasPurchase && <span className="normal-case font-normal text-muted-foreground/70">(porudžbina {order.purchase!.purchaseNumber})</span>}
             </CardTitle>
             {remaining > 0 && (
               <button onClick={() => setShowPayment(!showPayment)}
@@ -794,12 +939,12 @@ ${order.notes ? `
           <CardContent>
             <div className="flex items-center gap-8 flex-wrap">
               <div>
-                <p className="text-xs text-muted-foreground">Ukupno</p>
-                <p className="text-xl font-bold">RSD {totalAmount.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{hasPurchase ? "Ukupno (porudžbina)" : "Ukupno"}</p>
+                <p className="text-xl font-bold">RSD {payTotal.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Plaćeno</p>
-                <p className="text-xl font-bold text-green-600">RSD {paidAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold text-green-600">RSD {payPaid.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Ostatak</p>
@@ -809,14 +954,19 @@ ${order.notes ? `
               </div>
               <div className="ml-auto">
                 <span className={`text-xs px-3 py-1 rounded-full font-medium ${
-                  order.paymentStatus === "paid" ? "bg-green-100 text-green-800" :
-                  order.paymentStatus === "partial" ? "bg-yellow-100 text-yellow-800" :
+                  payStatus === "paid" ? "bg-green-100 text-green-800" :
+                  payStatus === "avans" || payStatus === "partial" ? "bg-yellow-100 text-yellow-800" :
                   "bg-red-100 text-red-700"
                 }`}>
-                  {order.paymentStatus === "paid" ? "Plaćeno" : order.paymentStatus === "partial" ? "Djelimično plaćeno" : "Neplaćeno"}
+                  {payStatus === "paid" ? "Plaćeno" : payStatus === "avans" ? "Avans uplaćen" : payStatus === "partial" ? "Djelimično plaćeno" : "Neplaćeno"}
                 </span>
               </div>
             </div>
+            {hasPurchase && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Napomena: naplata se vodi na nivou cele porudžbine (jedan avans pokriva sve naloge u njoj), ne po pojedinačnom nalogu.
+              </p>
+            )}
 
             {showPayment && (
               <div className="mt-4 pt-4 border-t flex items-end gap-3 flex-wrap">

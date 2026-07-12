@@ -57,6 +57,7 @@ export async function getCustomer(id: string) {
         where: (m, { eq }) => eq(m.isActive, true),
       },
       orders: {
+        with: { items: true },
         orderBy: (o, { desc }) => [desc(o.createdAt)],
       },
       corrections: {
@@ -235,7 +236,9 @@ export async function addHistoricalPurchase(
     orderNumber,
     customerId,
     orderType: "custom",
+    orderKind: "domaca",
     status: "delivered",
+    nalogStatus: "preuzeto",
     createdBy: user.id,
     dueDate: data.deliveredAt,
     deliveredAt: new Date(data.deliveredAt),

@@ -1,71 +1,112 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import type { Order, Customer } from "@/lib/db/schema";
+import type { Order, Customer, OrderItem, Purchase } from "@/lib/db/schema";
+
+// Nalog sa svime što lista prikazuje
+type Nalog = Order & {
+  customer: Customer | null;
+  items: OrderItem[];
+  purchase: Purchase | null;
+};
 
 const today = new Date().toISOString().split("T")[0];
 
-function isOverdue(order: Order) {
-  if (!order.dueDate) return false;
-  if (order.status === "delivered" || order.status === "cancelled") return false;
-  return order.dueDate < today;
+function isOverdue(n: Nalog) {
+  if (!n.dueDate) return false;
+  if (n.nalogStatus === "preuzeto" || n.nalogStatus === "otkazano") return false;
+  return n.dueDate < today;
 }
 
-const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-700",
-  confirmed: "bg-blue-100 text-blue-800",
-  in_production: "bg-yellow-100 text-yellow-800",
-  ready: "bg-green-100 text-green-800",
-  delivered: "bg-gray-100 text-gray-600",
-  cancelled: "bg-red-100 text-red-700",
+// Plaćanje je na nivou porudžbine (avans pokriva celu porudžbinu).
+// Za stare naloge bez porudžbine — padni na status samog naloga.
+function paymentOf(n: Nalog): string {
+  return n.purchase?.paymentStatus ?? n.paymentStatus ?? "unpaid";
+}
+function isPaid(n: Nalog) {
+  return paymentOf(n) === "paid";
+}
+
+// ─── Tip naloga (Artikal kolona iz Aleksandrovog modela) ──────────────────────
+const kindLabels: Record<string, string> = {
+  domaca: "Domaća",
+  munro: "Munro",
+  gotov: "Gotov proizvod",
+};
+const kindColors: Record<string, string> = {
+  domaca: "bg-blue-100 text-blue-800",
+  munro: "bg-purple-100 text-purple-700",
+  gotov: "bg-emerald-100 text-emerald-700",
 };
 
-const statusLabels: Record<string, string> = {
-  draft: "Nacrt",
-  confirmed: "Potvrđen",
-  in_production: "U produkciji",
-  ready: "Gotov",
-  delivered: "Isporučen",
-  cancelled: "Otkazano",
+// ─── Status naloga (tok kroz proizvodnju) ─────────────────────────────────────
+const nalogStatusLabels: Record<string, string> = {
+  naruceno: "Naručeno",
+  ceka_materijal: "Čeka materijal",
+  za_izradu: "Za izradu",
+  izrada: "U izradi",
+  gotovo: "Gotovo",
+  u_radnji: "U radnji",
+  preuzeto: "Preuzeto",
+  korekcija: "Korekcija",
+  otkazano: "Otkazano",
+};
+const nalogStatusColors: Record<string, string> = {
+  naruceno: "bg-gray-100 text-gray-700",
+  ceka_materijal: "bg-amber-100 text-amber-800",
+  za_izradu: "bg-sky-100 text-sky-800",
+  izrada: "bg-yellow-100 text-yellow-800",
+  gotovo: "bg-green-100 text-green-800",
+  u_radnji: "bg-teal-100 text-teal-800",
+  preuzeto: "bg-gray-100 text-gray-500",
+  korekcija: "bg-orange-100 text-orange-800",
+  otkazano: "bg-red-100 text-red-700",
 };
 
-const typeLabels: Record<string, string> = {
-  custom: "Po meri",
-  ready_made: "Gotova roba",
-  correction: "Korekcija",
-};
+// Artikli iz stavki naloga (padni na staro polje `item` za stare naloge)
+function artikliText(n: Nalog): string {
+  if (n.items.length > 0) {
+    const names = n.items.map((it) =>
+      it.quantity && it.quantity > 1 ? `${it.artikal} ×${it.quantity}` : it.artikal
+    );
+    if (names.length <= 2) return names.join(", ");
+    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  }
+  return n.item ?? "—";
+}
 
 const PAGE_SIZE = 25;
 
 export function OrdersClient({
-  orders, customers, initialFilter,
+  nalozi,
+  initialFilter,
 }: {
-  orders: Order[];
-  customers: Customer[];
+  nalozi: Nalog[];
   initialFilter?: string;
 }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialFilter ?? "all");
   const [page, setPage] = useState(1);
 
-  const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
-
-  const allFiltered = orders
-    .filter((o) => {
-      const customer = o.customerId ? customerMap[o.customerId] : null;
+  const allFiltered = nalozi
+    .filter((n) => {
+      const q = search.toLowerCase();
+      const customer = n.customer;
       const matchSearch =
-        o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
-        (customer && `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(search.toLowerCase())) ||
-        (o.item ?? "").toLowerCase().includes(search.toLowerCase());
+        !q ||
+        n.orderNumber.toLowerCase().includes(q) ||
+        (n.purchase?.purchaseNumber ?? "").toLowerCase().includes(q) ||
+        (!!customer && `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(q)) ||
+        artikliText(n).toLowerCase().includes(q);
       const matchStatus =
         statusFilter === "all" ? true :
-        statusFilter === "overdue" ? isOverdue(o) :
-        statusFilter === "unpaid" ? (o.paymentStatus !== "paid" && o.status !== "cancelled") :
-        o.status === statusFilter;
+        statusFilter === "overdue" ? isOverdue(n) :
+        statusFilter === "unpaid" ? (!isPaid(n) && n.nalogStatus !== "otkazano") :
+        n.nalogStatus === statusFilter;
       return matchSearch && matchStatus;
     })
     .sort((a, b) => {
@@ -83,19 +124,21 @@ export function OrdersClient({
   const totalPages = Math.ceil(allFiltered.length / PAGE_SIZE);
   const filtered = allFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const overdueCount = orders.filter(isOverdue).length;
-
-  const unpaidCount = orders.filter(o => o.paymentStatus !== "paid" && o.status !== "cancelled").length;
+  const overdueCount = nalozi.filter(isOverdue).length;
+  const unpaidCount = nalozi.filter((n) => !isPaid(n) && n.nalogStatus !== "otkazano").length;
+  const countBy = (status: string) => nalozi.filter((n) => n.nalogStatus === status).length;
 
   const tabs = [
-    { key: "all", label: "Svi", count: orders.length },
+    { key: "all", label: "Svi", count: nalozi.length },
     { key: "overdue", label: "Kasni", count: overdueCount },
     { key: "unpaid", label: "Neplaćeni", count: unpaidCount },
-    { key: "draft", label: "Nacrt", count: orders.filter(o => o.status === "draft").length },
-    { key: "confirmed", label: "Potvrđeni", count: orders.filter(o => o.status === "confirmed").length },
-    { key: "in_production", label: "U produkciji", count: orders.filter(o => o.status === "in_production").length },
-    { key: "ready", label: "Gotovi", count: orders.filter(o => o.status === "ready").length },
-    { key: "delivered", label: "Isporučeni", count: orders.filter(o => o.status === "delivered").length },
+    { key: "naruceno", label: "Naručeno", count: countBy("naruceno") },
+    { key: "ceka_materijal", label: "Čeka materijal", count: countBy("ceka_materijal") },
+    { key: "za_izradu", label: "Za izradu", count: countBy("za_izradu") },
+    { key: "izrada", label: "U izradi", count: countBy("izrada") },
+    { key: "gotovo", label: "Gotovo", count: countBy("gotovo") },
+    { key: "u_radnji", label: "U radnji", count: countBy("u_radnji") },
+    { key: "preuzeto", label: "Preuzeto", count: countBy("preuzeto") },
   ];
 
   return (
@@ -103,11 +146,11 @@ export function OrdersClient({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Nalozi</h1>
-          <p className="text-muted-foreground text-sm mt-1">{orders.length} ukupno naloga</p>
+          <p className="text-muted-foreground text-sm mt-1">{nalozi.length} ukupno naloga</p>
         </div>
         <Link href="/orders/new"
           className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
-          <Plus className="w-4 h-4" /> Novi nalog
+          <Plus className="w-4 h-4" /> Nova porudžbina
         </Link>
       </div>
 
@@ -139,13 +182,13 @@ export function OrdersClient({
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input placeholder="Pretraži po klijentu, broju..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        <Input placeholder="Pretraži po klijentu, broju, artiklu..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
       </div>
 
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[700px]">
+          <table className="w-full min-w-[760px]">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Nalog</th>
@@ -157,15 +200,15 @@ export function OrdersClient({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order) => {
-                const customer = order.customerId ? customerMap[order.customerId] : null;
+              {filtered.map((n) => {
+                const customer = n.customer;
                 return (
-                  <tr key={order.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                  <tr key={n.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
-                      <Link href={`/orders/${order.id}`} className="text-sm font-mono font-medium hover:underline">
-                        {order.orderNumber}
+                      <Link href={`/orders/${n.id}`} className="text-sm font-mono font-medium hover:underline">
+                        {n.orderNumber}
                       </Link>
-                      <p className="text-xs text-muted-foreground mt-0.5">{order.item ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{artikliText(n)}</p>
                     </td>
                     <td className="px-4 py-3">
                       {customer ? (
@@ -175,34 +218,31 @@ export function OrdersClient({
                       ) : <span className="text-sm text-muted-foreground">—</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded">{typeLabels[order.orderType] ?? order.orderType}</span>
-                        {(order as Order & { productionFlow?: string }).productionFlow === "munro" && (
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-medium">Munro</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[order.status] ?? "bg-gray-100"}`}>
-                        {statusLabels[order.status] ?? order.status}
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${kindColors[n.orderKind] ?? "bg-muted"}`}>
+                        {kindLabels[n.orderKind] ?? n.orderKind}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      {order.dueDate ? (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${nalogStatusColors[n.nalogStatus] ?? "bg-gray-100"}`}>
+                        {nalogStatusLabels[n.nalogStatus] ?? n.nalogStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {n.dueDate ? (
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-sm ${isOverdue(order) ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
-                            {order.dueDate}
+                          <span className={`text-sm ${isOverdue(n) ? "text-red-600 font-medium" : "text-muted-foreground"}`}>
+                            {n.dueDate}
                           </span>
-                          {isOverdue(order) && (
+                          {isOverdue(n) && (
                             <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-medium">Kasni</span>
                           )}
                         </div>
                       ) : <span className="text-sm text-muted-foreground">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <p className="text-sm font-medium">RSD {Number(order.totalAmount).toLocaleString()}</p>
-                      <p className={`text-xs ${order.paymentStatus === "paid" ? "text-green-600" : "text-orange-600"}`}>
-                        {order.paymentStatus === "paid" ? "Plaćeno" : order.paymentStatus === "partial" ? "Djelimično" : "Neplaćeno"}
+                      <p className="text-sm font-medium">RSD {Number(n.totalAmount).toLocaleString()}</p>
+                      <p className={`text-xs ${isPaid(n) ? "text-green-600" : paymentOf(n) === "avans" || paymentOf(n) === "partial" ? "text-orange-600" : "text-red-600"}`}>
+                        {isPaid(n) ? "Plaćeno" : paymentOf(n) === "avans" || paymentOf(n) === "partial" ? "Avans uplaćen" : "Neplaćeno"}
                       </p>
                     </td>
                   </tr>
@@ -212,7 +252,7 @@ export function OrdersClient({
           </table>
           {filtered.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              {search ? `Nema rezultata za "${search}"` : "Nema naloga. Kreiraj prvi nalog!"}
+              {search ? `Nema rezultata za "${search}"` : "Nema naloga. Kreiraj prvu porudžbinu!"}
             </div>
           )}
           </div>

@@ -195,6 +195,42 @@ export async function getPurchases() {
   });
 }
 
+// ─── getNalozi — lista pojedinačnih naloga za praćenje proizvodnje ────────────
+// Radnici u radnji prate status svakog naloga posebno (Aleksandrov zahtjev:
+// "200 košulja... da svako zna dokle je stigla koja"). Vraća naloge sa stavkama,
+// klijentom i porudžbinom (radi avansa/plaćanja na nivou porudžbine).
+export async function getNalozi() {
+  const { dbUser } = await getCurrentUser();
+  return db.query.orders.findMany({
+    where: (o, { eq }) => eq(o.companyId, dbUser.companyId!),
+    with: {
+      customer: true,
+      items: true,
+      purchase: true,
+    },
+    orderBy: (o, { desc }) => [desc(o.createdAt)],
+  });
+}
+
+// ─── getNaloziForProduction — aktivni nalozi za Kanban tablu ──────────────────
+// Vraća naloge koji su još u toku (nisu preuzeti ni otkazani), sa klijentom i
+// stavkama, radi praćenja faze izrade po nalogu.
+export async function getNaloziForProduction() {
+  const { dbUser } = await getCurrentUser();
+  return db.query.orders.findMany({
+    where: (o, { eq, and, notInArray }) =>
+      and(
+        eq(o.companyId, dbUser.companyId!),
+        notInArray(o.nalogStatus, ["preuzeto", "otkazano"]),
+      ),
+    with: {
+      customer: true,
+      items: true,
+    },
+    orderBy: (o, { asc }) => [asc(o.dueDate)],
+  });
+}
+
 // ─── getPurchase — detalj sa nalozima i stavkama ──────────────────────────────
 export async function getPurchase(id: string) {
   const { dbUser } = await getCurrentUser();

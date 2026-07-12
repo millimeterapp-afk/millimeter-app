@@ -7,14 +7,50 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Phone, Mail, MapPin, Ruler, Star, ClipboardList, Wrench, Check, Pencil, Plus, History, CalendarDays, Clock, Package } from "lucide-react";
 import Link from "next/link";
-import type { Customer, CustomerMeasurement, Order, Correction, Appointment } from "@/lib/db/schema";
+import type { Customer, CustomerMeasurement, Order, OrderItem, Correction, Appointment } from "@/lib/db/schema";
 import type { GoCreateOrder } from "@/lib/gocreate";
 
 type CustomerWithDetails = Customer & {
   measurements: CustomerMeasurement[];
-  orders: Order[];
+  orders: (Order & { items: OrderItem[] })[];
   corrections: Correction[];
 };
+
+const nalogStatusLabels: Record<string, string> = {
+  naruceno: "Naručeno",
+  ceka_materijal: "Čeka materijal",
+  za_izradu: "Za izradu",
+  izrada: "U izradi",
+  gotovo: "Gotovo",
+  u_radnji: "U radnji",
+  preuzeto: "Preuzeto",
+  korekcija: "Korekcija",
+  otkazano: "Otkazano",
+};
+const nalogStatusColors: Record<string, string> = {
+  naruceno: "bg-gray-100 text-gray-700",
+  ceka_materijal: "bg-amber-100 text-amber-800",
+  za_izradu: "bg-sky-100 text-sky-800",
+  izrada: "bg-yellow-100 text-yellow-800",
+  gotovo: "bg-green-100 text-green-800",
+  u_radnji: "bg-teal-100 text-teal-800",
+  preuzeto: "bg-gray-100 text-gray-500",
+  korekcija: "bg-orange-100 text-orange-800",
+  otkazano: "bg-red-100 text-red-700",
+};
+const kindLabels: Record<string, string> = {
+  domaca: "Domaća izrada",
+  munro: "Munro",
+  gotov: "Gotov proizvod",
+};
+function nalogArtikliText(o: Order & { items: OrderItem[] }): string {
+  if (o.items.length > 0) {
+    const names = o.items.map((it) => (it.quantity && it.quantity > 1 ? `${it.artikal} ×${it.quantity}` : it.artikal));
+    if (names.length <= 2) return names.join(", ");
+    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  }
+  return o.item ?? "—";
+}
 
 const typeLabels: Record<string, string> = {
   merenje: "Merenje", proba: "Proba", isporuka: "Isporuka",
@@ -39,24 +75,6 @@ const apptStatusColors: Record<string, string> = {
   completed: "bg-green-100 text-green-800",
   cancelled: "bg-gray-100 text-gray-500",
   no_show: "bg-red-100 text-red-700",
-};
-
-const statusLabels: Record<string, string> = {
-  draft: "Draft",
-  confirmed: "Potvrđen",
-  in_production: "U produkciji",
-  ready: "Gotov",
-  delivered: "Isporučen",
-  cancelled: "Otkazan",
-};
-
-const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-600",
-  confirmed: "bg-blue-100 text-blue-800",
-  in_production: "bg-yellow-100 text-yellow-800",
-  ready: "bg-green-100 text-green-800",
-  delivered: "bg-gray-100 text-gray-500",
-  cancelled: "bg-red-100 text-red-700",
 };
 
 const tierColors: Record<string, string> = {
@@ -454,14 +472,14 @@ export function CustomerProfileClient({ customer, appointments, munroOrders }: {
                           {new Date(order.createdAt).toLocaleDateString("sr-RS")}
                         </td>
                         <td className="px-4 py-3">
-                          <p className="text-sm">{order.item ?? "—"}</p>
+                          <p className="text-sm">{nalogArtikliText(order)}</p>
                           <p className="text-xs text-muted-foreground">
-                            {order.orderType === "custom" ? "Po meri" : order.orderType === "ready_made" ? "Gotova roba" : "Korekcija"}
+                            {kindLabels[order.orderKind] ?? order.orderKind}
                           </p>
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[order.status] ?? "bg-gray-100"}`}>
-                            {statusLabels[order.status] ?? order.status}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${nalogStatusColors[order.nalogStatus] ?? "bg-gray-100"}`}>
+                            {nalogStatusLabels[order.nalogStatus] ?? order.nalogStatus}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right text-sm font-medium">
