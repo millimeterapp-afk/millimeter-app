@@ -55,9 +55,10 @@ const typeLabels: Record<string, string> = {
 };
 
 export function DashboardClient({
-  nalozi, customers, corrections, todayAppointments,
+  nalozi, payments, customers, corrections, todayAppointments,
 }: {
   nalozi: Nalog[];
+  payments: { amount: string; paymentDate: string }[];
   customers: Customer[];
   corrections: Correction[];
   todayAppointments: AppointmentWithCustomer[];
@@ -66,41 +67,40 @@ export function DashboardClient({
   const inIzrada = nalozi.filter((n) => n.nalogStatus === "izrada");
   const preuzetoCount = nalozi.filter((n) => n.nalogStatus === "preuzeto").length;
 
-  // Naplata: avans/plaćanje se vodi na nivou porudžbine — dedupliramo porudžbine
+  // Nenaplaćeno: avans/plaćanje se vodi na nivou porudžbine — dedupliramo porudžbine
   // da ne bismo brojali isti ostatak više puta (svadba = 1 porudžbina, više naloga).
   const seenPurchases = new Set<string>();
   let unpaidAmount = 0;
   let unpaidCount = 0;
-  const revenueByMonth: Record<string, number> = {};
-  let thisMonthRevenue = 0;
-
-  const addRevenue = (date: Date, amount: number) => {
-    if (amount <= 0) return;
-    const month = date.toLocaleString("sr-Latn", { month: "short" });
-    revenueByMonth[month] = (revenueByMonth[month] ?? 0) + amount;
-    if (date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()) {
-      thisMonthRevenue += amount;
-    }
-  };
-
   for (const n of nalozi) {
     if (n.nalogStatus === "otkazano") continue;
     if (n.purchase) {
       if (seenPurchases.has(n.purchase.id)) continue;
       seenPurchases.add(n.purchase.id);
-      const total = Number(n.purchase.totalAmount);
-      const paid = Number(n.purchase.paidAmount);
-      const rem = total - paid;
+      const rem = Number(n.purchase.totalAmount) - Number(n.purchase.paidAmount);
       if (rem > 0.005) { unpaidAmount += rem; unpaidCount++; }
-      addRevenue(new Date(n.purchase.createdAt), paid);
     } else {
       const rem = Number(n.totalAmount) - Number(n.paidAmount);
       if (n.paymentStatus !== "paid" && rem > 0.005) { unpaidAmount += rem; unpaidCount++; }
-      addRevenue(new Date(n.createdAt), Number(n.paidAmount));
     }
   }
 
-  const chartData = Object.entries(revenueByMonth).map(([month, prihod]) => ({ month, prihod }));
+  // Naplata: iz tabele uplata, po DATUMU KAD JE NOVAC LEGAO (avans i doplata mogu
+  // biti u različitim mjesecima). Redoslijed mjeseci hronološki.
+  const revByKey: Record<string, { label: string; sort: string; amount: number }> = {};
+  let thisMonthRevenue = 0;
+  for (const p of payments) {
+    const amount = Number(p.amount);
+    if (!(amount > 0)) continue;
+    const d = new Date(p.paymentDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    if (!revByKey[key]) revByKey[key] = { label: d.toLocaleString("sr-Latn", { month: "short" }), sort: key, amount: 0 };
+    revByKey[key].amount += amount;
+    if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) thisMonthRevenue += amount;
+  }
+  const chartData = Object.values(revByKey)
+    .sort((a, b) => a.sort.localeCompare(b.sort))
+    .map((r) => ({ month: r.label, prihod: r.amount }));
 
   const topCustomers = [...customers]
     .sort((a, b) => Number(b.totalSpent) - Number(a.totalSpent))

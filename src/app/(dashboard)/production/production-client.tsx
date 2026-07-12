@@ -123,13 +123,15 @@ export function ProductionClient({
       )}
 
       {/* Kolone po fazi */}
-      <div className="overflow-x-auto pb-2">
-        <div className="grid grid-cols-6 gap-3 min-w-[1100px] items-start">
+      {/* Na telefonu: faze jedna ispod druge (bez skrolovanja u stranu).
+          Na širem ekranu: klasičan Kanban sa 6 kolona. */}
+      <div className="md:overflow-x-auto md:pb-2">
+        <div className="flex flex-col gap-4 md:grid md:grid-cols-6 md:gap-3 md:min-w-[1100px] md:items-start">
           {columns.map((col) => {
             const colNalozi = nalozi.filter((n) => n.nalogStatus === col.id);
             const next = nextOf(col.id);
             return (
-              <div key={col.id} className="space-y-3">
+              <div key={col.id} className="space-y-2 md:space-y-3">
                 <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${col.bg}`}>
                   <span className={`text-sm font-medium ${col.accent}`}>{statusLabels[col.id]}</span>
                   <span className="ml-auto text-xs text-muted-foreground bg-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm">
@@ -137,7 +139,7 @@ export function ProductionClient({
                   </span>
                 </div>
 
-                <div className="space-y-2 min-h-24">
+                <div className="space-y-2 md:min-h-24">
                   {colNalozi.map((n) => {
                     const overdue = n.dueDate && n.dueDate < today;
                     return (
@@ -173,7 +175,7 @@ export function ProductionClient({
                     );
                   })}
                   {colNalozi.length === 0 && (
-                    <div className="border-2 border-dashed rounded-lg h-20 flex items-center justify-center">
+                    <div className="hidden md:flex border-2 border-dashed rounded-lg h-20 items-center justify-center">
                       <p className="text-xs text-muted-foreground">—</p>
                     </div>
                   )}

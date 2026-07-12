@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateOrderStatus, updateOrderPayment, updateOrder } from "@/lib/actions/orders";
-import { updateNalogStatus, addPurchasePayment } from "@/lib/actions/purchases";
+import { updateNalogStatus, addPurchasePayment, updateOrderItems } from "@/lib/actions/purchases";
 import { createCorrection } from "@/lib/actions/corrections";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,6 +128,23 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
     affectsTemplate: false,
   });
 
+  // Izmjena stavki — modal drži KOPIJU svih polja (i skrivenih) da se ništa ne izgubi
+  const [showItemsEdit, setShowItemsEdit] = useState(false);
+  const [itemsForm, setItemsForm] = useState(() =>
+    order.items.map((it) => ({
+      artikal: it.artikal,
+      quantity: it.quantity ?? 1,
+      unitPrice: String(Number(it.unitPrice)),
+      material: it.material ?? "",
+      templateNumber: it.templateNumber ?? "",
+      collarType: it.collarType ?? "",
+      cuffType: it.cuffType ?? "",
+      fitType: it.fitType ?? "",
+      measurementSnapshot: (it.measurementSnapshot as Record<string, unknown> | null) ?? null,
+      monogramData: (it.monogramData as Record<string, unknown> | null) ?? null,
+    }))
+  );
+
   const customer = order.customer;
   const currentStepIndex = statusFlow.findIndex(s => s.id === order.status);
   const nextStatus = nextStatusMap[order.status];
@@ -193,6 +210,42 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
         router.refresh();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "Greška pri promjeni faze izrade.");
+      }
+    });
+  };
+
+  // — Stavke: mutacije forme —
+  const updateItemField = (i: number, patch: Partial<(typeof itemsForm)[number]>) =>
+    setItemsForm((prev) => prev.map((it, j) => (j === i ? { ...it, ...patch } : it)));
+  const addItemRow = () =>
+    setItemsForm((prev) => [...prev, {
+      artikal: "", quantity: 1, unitPrice: "", material: "", templateNumber: "",
+      collarType: "", cuffType: "", fitType: "", measurementSnapshot: null, monogramData: null,
+    }]);
+  const removeItemRow = (i: number) => setItemsForm((prev) => prev.filter((_, j) => j !== i));
+
+  const itemsFormTotal = itemsForm.reduce((s, it) => s + (Number(it.unitPrice) || 0) * (it.quantity || 1), 0);
+
+  const handleSaveItems = () => {
+    setActionError("");
+    startTransition(async () => {
+      try {
+        await updateOrderItems(order.id, itemsForm.map((it) => ({
+          artikal: it.artikal,
+          quantity: it.quantity,
+          unitPrice: Number(it.unitPrice) || 0,
+          material: it.material || undefined,
+          templateNumber: it.templateNumber || undefined,
+          collarType: it.collarType || undefined,
+          cuffType: it.cuffType || undefined,
+          fitType: it.fitType || undefined,
+          measurementSnapshot: it.measurementSnapshot,
+          monogramData: it.monogramData,
+        })));
+        setShowItemsEdit(false);
+        router.refresh();
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Greška pri čuvanju stavki.");
       }
     });
   };
@@ -572,6 +625,73 @@ ${order.notes ? `
         </div>
       )}
 
+      {/* Modal za izmjenu stavki */}
+      {showItemsEdit && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Uredi stavke</h2>
+              <button onClick={() => setShowItemsEdit(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+            <div className="space-y-3">
+              {itemsForm.map((it, i) => (
+                <div key={i} className="border rounded-lg p-3 space-y-2 bg-muted/20">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-medium text-muted-foreground">Artikal *</label>
+                      <Input value={it.artikal} onChange={(e) => updateItemField(i, { artikal: e.target.value })}
+                        className="mt-1" placeholder="npr. Košulja Puplin" />
+                    </div>
+                    {itemsForm.length > 1 && (
+                      <button onClick={() => removeItemRow(i)} className="mt-6 text-muted-foreground hover:text-red-600">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground">Količina</label>
+                      <Input type="number" min={1} value={it.quantity}
+                        onChange={(e) => updateItemField(i, { quantity: Math.max(1, Number(e.target.value) || 1) })} className="mt-1" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Cena / kom</label>
+                      <Input type="number" value={it.unitPrice}
+                        onChange={(e) => updateItemField(i, { unitPrice: e.target.value })} className="mt-1" placeholder="0" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground">Materijal</label>
+                      <Input value={it.material} onChange={(e) => updateItemField(i, { material: e.target.value })} className="mt-1" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-right">
+                    Ukupno: RSD {((Number(it.unitPrice) || 0) * (it.quantity || 1)).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+              <button onClick={addItemRow} className="flex items-center gap-1.5 text-sm text-black hover:underline">
+                + Dodaj stavku
+              </button>
+            </div>
+            <div className="flex items-center justify-between border-t pt-3 text-sm">
+              <span className="text-muted-foreground">Novo ukupno naloga</span>
+              <span className="font-bold">RSD {itemsFormTotal.toLocaleString()}</span>
+            </div>
+            {order.purchase && (
+              <p className="text-xs text-muted-foreground">Menja se i ukupan iznos porudžbine {order.purchase.purchaseNumber}.</p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowItemsEdit(false)} className="flex-1 border rounded-md py-2 text-sm hover:bg-muted">Otkaži</button>
+              <button onClick={handleSaveItems}
+                disabled={isPending || itemsForm.length === 0 || itemsForm.some((it) => !it.artikal.trim())}
+                className="flex-1 bg-black text-white rounded-md py-2 text-sm hover:bg-black/80 disabled:opacity-50">
+                {isPending ? "Čuvanje..." : "Sačuvaj stavke"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal za edit naloga */}
       {showEdit && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -743,10 +863,16 @@ ${order.notes ? `
       {/* Stavke naloga — artikli iz porudžbine */}
       {order.items.length > 0 && (
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Stavke naloga ({order.items.length})
             </CardTitle>
+            {order.nalogStatus !== "preuzeto" && order.nalogStatus !== "otkazano" && (
+              <button onClick={() => setShowItemsEdit(true)}
+                className="flex items-center gap-1.5 text-xs border px-2.5 py-1 rounded hover:bg-muted transition-colors">
+                <Pencil className="w-3.5 h-3.5" /> Uredi stavke
+              </button>
+            )}
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">

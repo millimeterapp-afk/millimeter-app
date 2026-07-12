@@ -214,6 +214,17 @@ export async function getPurchases() {
   });
 }
 
+// ─── getPayments — sve uplate firme (za tačan prihod po datumu naplate) ───────
+// Grafikon naplate treba da knjiži novac u mjesec kad je STVARNO legao
+// (avans u julu, doplata u avgustu = dva različita mjeseca), ne u mjesec porudžbine.
+export async function getPayments() {
+  const { dbUser } = await getCurrentUser();
+  return db
+    .select({ amount: payments.amount, paymentDate: payments.paymentDate })
+    .from(payments)
+    .where(eq(payments.companyId, dbUser.companyId!));
+}
+
 // ─── getNalozi — lista pojedinačnih naloga za praćenje proizvodnje ────────────
 // Radnici u radnji prate status svakog naloga posebno (Aleksandrov zahtjev:
 // "200 košulja... da svako zna dokle je stigla koja"). Vraća naloge sa stavkama,
@@ -262,6 +273,25 @@ export async function getPurchase(id: string) {
   });
 }
 
+// ─── Preračun ukupnog porudžbine ──────────────────────────────────────────────
+// Ukupno = zbir naloga koji NISU otkazani. Ponovo izračuna i status plaćanja.
+// Jedna atomarna izjava — koristi se u više akcija (otkazivanje naloga, izmjena stavki).
+const recalcPurchaseTotalsSql = (purchaseId: string, companyId: string) => sql`
+  WITH t AS (
+    SELECT COALESCE(SUM(total_amount), 0) AS total
+    FROM orders WHERE purchase_id = ${purchaseId} AND nalog_status <> 'otkazano'
+  )
+  UPDATE purchases p
+  SET total_amount = t.total,
+      payment_status = CASE
+        WHEN p.paid_amount >= t.total AND t.total > 0 THEN 'paid'
+        WHEN p.paid_amount > 0 THEN 'avans'
+        ELSE 'unpaid' END,
+      updated_at = now()
+  FROM t
+  WHERE p.id = ${purchaseId} AND p.company_id = ${companyId}
+`;
+
 // ─── updateNalogStatus — pomjeri nalog kroz tok ───────────────────────────────
 const NALOG_STATUSES = [
   "naruceno", "ceka_materijal", "za_izradu", "izrada",
@@ -273,11 +303,81 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
   const { dbUser } = await getCurrentUser();
   // Runtime provjera — TypeScript tip ne štiti od ručno pozvane server akcije
   if (!NALOG_STATUSES.includes(status)) throw new Error("Nepoznat status naloga.");
-  await db.update(orders)
-    .set({ nalogStatus: status, updatedAt: new Date() })
-    .where(and(eq(orders.id, nalogId), eq(orders.companyId, dbUser.companyId!)));
+  const companyId = dbUser.companyId!;
+
+  await db.transaction(async (tx) => {
+    const [row] = await tx.update(orders)
+      .set({ nalogStatus: status, updatedAt: new Date() })
+      .where(and(eq(orders.id, nalogId), eq(orders.companyId, companyId)))
+      .returning({ purchaseId: orders.purchaseId });
+    // Otkazivanje/vraćanje naloga mijenja ukupno porudžbine — preračunaj
+    if (row?.purchaseId) await tx.execute(recalcPurchaseTotalsSql(row.purchaseId, companyId));
+  });
+
   revalidatePath("/orders");
   revalidatePath("/production");
+}
+
+// ─── updateOrderItems — izmjena stavki naloga poslije kreiranja ────────────────
+// Zamjenjuje stavke naloga i preračunava ukupno naloga i porudžbine.
+// Sprječava "otkaži pa napravi novo" kad se pogriješi cijena/količina/artikal.
+interface EditItem {
+  artikal: string;
+  quantity: number;
+  unitPrice: number;
+  material?: string;
+  templateNumber?: string;
+  collarType?: string;
+  cuffType?: string;
+  fitType?: string;
+  measurementSnapshot?: Record<string, unknown> | null;
+  monogramData?: Record<string, unknown> | null;
+}
+
+export async function updateOrderItems(orderId: string, items: EditItem[]) {
+  const { dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
+
+  if (!Array.isArray(items) || items.length === 0)
+    throw new Error("Nalog mora imati bar jednu stavku.");
+  for (const it of items) {
+    if (!it.artikal || !it.artikal.trim()) throw new Error("Svaka stavka mora imati artikal.");
+    if (!Number.isFinite(it.quantity) || it.quantity < 1) throw new Error("Količina mora biti broj ≥ 1.");
+    if (!Number.isFinite(it.unitPrice) || it.unitPrice < 0) throw new Error("Cena mora biti broj ≥ 0.");
+  }
+
+  // Nalog mora pripadati firmi (cross-tenant zaštita)
+  const order = await db.query.orders.findFirst({
+    where: (o, { eq, and }) => and(eq(o.id, orderId), eq(o.companyId, companyId)),
+  });
+  if (!order) throw new Error("Nalog nije pronađen.");
+
+  const nalogTotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
+
+  await db.transaction(async (tx) => {
+    await tx.delete(orderItems).where(eq(orderItems.orderId, orderId));
+    await tx.insert(orderItems).values(items.map((it) => ({
+      orderId,
+      artikal: it.artikal.trim(),
+      quantity: it.quantity,
+      unitPrice: String(it.unitPrice),
+      totalPrice: String(it.unitPrice * it.quantity),
+      material: it.material || null,
+      templateNumber: it.templateNumber || null,
+      collarType: it.collarType || null,
+      cuffType: it.cuffType || null,
+      fitType: it.fitType || null,
+      measurementSnapshot: it.measurementSnapshot ?? null,
+      monogramData: it.monogramData ?? null,
+    })));
+    await tx.update(orders)
+      .set({ totalAmount: String(nalogTotal), updatedAt: new Date() })
+      .where(and(eq(orders.id, orderId), eq(orders.companyId, companyId)));
+    if (order.purchaseId) await tx.execute(recalcPurchaseTotalsSql(order.purchaseId, companyId));
+  });
+
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/orders");
 }
 
 // ─── addPurchasePayment — doplata na porudžbinu ───────────────────────────────
