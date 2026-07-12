@@ -506,6 +506,14 @@ Isti pattern za sve tabele: companies, users, customers, customer_measurements, 
 
 ## 14. Česte greške i rješenja
 
+### ⚠️⚠️ `drizzle-kit push --force` BRIŠE SVE RLS (kritično!)
+Push dropuje i ponovo pravi tabele → **briše sve RLS policy-je i isključuje RLS na SVIM tabelama**. Nakon SVAKOG push-a OBAVEZNO ponovo primijeniti `supabase/rls.sql` (ili MCP migraciju) i provjeriti:
+```sql
+SELECT (SELECT COUNT(*) FROM pg_tables WHERE schemaname='public' AND rowsecurity=true) AS rls_on,
+       (SELECT COUNT(*) FROM pg_policies WHERE schemaname='public') AS policies;  -- mora 23 i 23
+```
+Desilo se 2026-07-09 (dodavanje purchases/order_items) — uhvaćeno i vraćeno.
+
 ### `drizzle-kit push` visi na "Pulling schema from database..."
 Koristiti session pooler (port 5432) sa `--force`, ne transaction pooler (6543):
 ```powershell

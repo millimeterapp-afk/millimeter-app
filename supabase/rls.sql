@@ -2,6 +2,11 @@
 -- Millimeter App — Row Level Security (RLS)
 -- Supabase Dashboard → SQL Editor → pokrenuti odjednom
 --
+-- ⚠️⚠️ KRITIČNO: `drizzle-kit push --force` DROPUJE tabele i BRIŠE SVE RLS
+-- policy-je + isključuje RLS! Nakon SVAKOG drizzle push-a OBAVEZNO ponovo
+-- pokrenuti ovaj fajl (ili migraciju) da se RLS vrati. Provjeri poslije:
+--   SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname='public';
+--
 -- Arhitektura:
 --   • Drizzle (postgres role) → zaobilazi RLS — app radi normalno
 --   • Supabase PostgREST API → RLS štiti direktan pristup
@@ -59,6 +64,8 @@ ALTER TABLE customers               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_measurements   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE materials               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory_items         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE purchases               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE order_items             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders                  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE material_reservations   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE production_tasks        ENABLE ROW LEVEL SECURITY;
@@ -105,6 +112,12 @@ CREATE POLICY "company_isolation" ON materials
 
 -- inventory_items
 CREATE POLICY "company_isolation" ON inventory_items
+  AS PERMISSIVE FOR ALL TO authenticated
+  USING (company_id = get_my_company_id())
+  WITH CHECK (company_id = get_my_company_id());
+
+-- purchases (porudžbina — direktan company_id)
+CREATE POLICY "company_isolation" ON purchases
   AS PERMISSIVE FOR ALL TO authenticated
   USING (company_id = get_my_company_id())
   WITH CHECK (company_id = get_my_company_id());
@@ -185,6 +198,20 @@ CREATE POLICY "company_isolation" ON customer_measurements
     SELECT 1 FROM customers c
     WHERE c.id = customer_id
       AND c.company_id = get_my_company_id()
+  ));
+
+-- order_items (stavke) → nasljeđuje zaštitu od orders
+CREATE POLICY "company_isolation" ON order_items
+  AS PERMISSIVE FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = order_id
+      AND o.company_id = get_my_company_id()
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM orders o
+    WHERE o.id = order_id
+      AND o.company_id = get_my_company_id()
   ));
 
 -- material_reservations → nasljeđuje zaštitu od orders

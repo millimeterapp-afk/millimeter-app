@@ -34,6 +34,26 @@ export const movementTypeEnum = pgEnum("movement_type", [
   "receive", "reserve", "release", "sell", "adjust",
 ]);
 
+// Tip naloga — određuje tok i rok
+export const orderKindEnum = pgEnum("order_kind", [
+  "domaca",  // domaća proizvodnja (Millimeter), rok 10-15 radnih dana
+  "munro",   // naručeno od Munro (GoCreate), rok 4-6 nedelja
+  "gotov",   // gotov proizvod / usluga od partnera (bez proizvodnje)
+]);
+
+// Status naloga u procesu (Aleksandarov tok za domaću proizvodnju; Munro/gotov koriste podskup)
+export const nalogStatusEnum = pgEnum("nalog_status", [
+  "naruceno",        // Naručeno — klijent odabrao, još nije poslato
+  "ceka_materijal",  // Čeka se materijal (opciono, ako nema na stanju)
+  "za_izradu",       // Napraviti nalog — međukorak da se ne zaboravi
+  "izrada",          // Izrada — u proizvodnji (Munro: u fabrici)
+  "gotovo",          // Gotovo — završeno u proizvodnji
+  "u_radnji",        // U radnji — stiglo, čeka klijenta
+  "preuzeto",        // Preuzeto — klijent pokupio
+  "korekcija",       // Korekcija — vraćeno u proizvodnju
+  "otkazano",        // Otkazano
+]);
+
 // ─── Companies ───────────────────────────────────────────────────────────────
 
 export const companies = pgTable("companies", {
@@ -134,15 +154,39 @@ export const inventoryItems = pgTable("inventory_items", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-// ─── Orders ───────────────────────────────────────────────────────────────────
+// ─── Purchases (PORUDŽBINA — parent iznad naloga) ──────────────────────────────
+// Jedna porudžbina = jedan dolazak klijenta = više naloga (Munro/domaća/gotov).
+// Avans se vodi na ovom nivou (50% svega naručenog odjednom).
+
+export const purchases = pgTable("purchases", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").references(() => companies.id).notNull(),
+  purchaseNumber: text("purchase_number").notNull(), // POR-2026-0001
+  customerId: uuid("customer_id").references(() => customers.id).notNull(),
+  createdBy: uuid("created_by").references(() => users.id),
+  totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+  avansAmount: numeric("avans_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+  paidAmount: numeric("paid_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+  paymentStatus: text("payment_status").default("unpaid").notNull(), // unpaid | avans | paid
+  status: text("status").default("open").notNull(), // open | completed | cancelled
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─── Orders (NALOG — pripada porudžbini, ima svoj tip i tok) ────────────────────
 
 export const orders = pgTable("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   companyId: uuid("company_id").references(() => companies.id).notNull(),
   orderNumber: text("order_number").notNull(),
   customerId: uuid("customer_id").references(() => customers.id),
+  // NOVO — veza na porudžbinu + tip/status naloga
+  purchaseId: uuid("purchase_id").references(() => purchases.id, { onDelete: "cascade" }),
+  orderKind: orderKindEnum("order_kind").default("domaca").notNull(),
+  nalogStatus: nalogStatusEnum("nalog_status").default("naruceno").notNull(),
   orderType: orderTypeEnum("order_type").default("custom").notNull(),
-  status: orderStatusEnum("status").default("draft").notNull(),
+  status: orderStatusEnum("status").default("draft").notNull(), // stari status — zadržan tokom tranzicije
   createdBy: uuid("created_by").references(() => users.id),
   dueDate: date("due_date"),
   completedAt: timestamp("completed_at"),
@@ -151,7 +195,7 @@ export const orders = pgTable("orders", {
   paidAmount: numeric("paid_amount", { precision: 10, scale: 2 }).default("0").notNull(),
   paymentStatus: text("payment_status").default("unpaid").notNull(),
   notes: text("notes"),
-  // Custom order specific fields (denormalized for simplicity)
+  // Stara denormalizovana polja — zadržana za tranziciju (stavke sad idu u order_items)
   item: text("item"),
   material: text("material"),
   templateNumber: text("template_number"),
@@ -162,6 +206,25 @@ export const orders = pgTable("orders", {
   measurementSnapshot: jsonb("measurement_snapshot"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─── Order Items (STAVKA — jedna stavka naloga, npr. jedna od 7 košulja) ────────
+
+export const orderItems = pgTable("order_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+  artikal: text("artikal").notNull(), // naziv proizvoda/artikla iz kase
+  quantity: integer("quantity").default(1).notNull(),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).default("0").notNull(),
+  totalPrice: numeric("total_price", { precision: 10, scale: 2 }).default("0").notNull(),
+  material: text("material"),
+  templateNumber: text("template_number"),
+  collarType: text("collar_type"),
+  cuffType: text("cuff_type"),
+  fitType: text("fit_type"),
+  measurementSnapshot: jsonb("measurement_snapshot"),
+  monogramData: jsonb("monogram_data"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // ─── Material Reservations ────────────────────────────────────────────────────
@@ -389,10 +452,21 @@ export const customerMeasurementsRelations = relations(customerMeasurements, ({ 
   customer: one(customers, { fields: [customerMeasurements.customerId], references: [customers.id] }),
 }));
 
+export const purchasesRelations = relations(purchases, ({ one, many }) => ({
+  customer: one(customers, { fields: [purchases.customerId], references: [customers.id] }),
+  orders: many(orders),
+}));
+
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   customer: one(customers, { fields: [orders.customerId], references: [customers.id] }),
+  purchase: one(purchases, { fields: [orders.purchaseId], references: [purchases.id] }),
+  items: many(orderItems),
   productionTasks: many(productionTasks),
   corrections: many(corrections),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
 }));
 
 export const productionTasksRelations = relations(productionTasks, ({ one }) => ({
@@ -451,6 +525,8 @@ export type CustomerMeasurement = typeof customerMeasurements.$inferSelect;
 export type Material = typeof materials.$inferSelect;
 export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type Order = typeof orders.$inferSelect;
+export type Purchase = typeof purchases.$inferSelect;
+export type OrderItem = typeof orderItems.$inferSelect;
 export type ProductionTask = typeof productionTasks.$inferSelect;
 export type Correction = typeof corrections.$inferSelect;
 export type Sale = typeof sales.$inferSelect;
@@ -465,6 +541,8 @@ export type InvoiceAdditionalCost = typeof invoiceAdditionalCosts.$inferSelect;
 
 export type InsertCustomer = typeof customers.$inferInsert;
 export type InsertOrder = typeof orders.$inferInsert;
+export type InsertPurchase = typeof purchases.$inferInsert;
+export type InsertOrderItem = typeof orderItems.$inferInsert;
 export type InsertCorrection = typeof corrections.$inferInsert;
 export type InsertMaterial = typeof materials.$inferInsert;
 export type InsertSale = typeof sales.$inferInsert;
