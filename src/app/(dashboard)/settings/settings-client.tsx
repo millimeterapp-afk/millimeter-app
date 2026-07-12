@@ -172,9 +172,9 @@ export function SettingsClient({
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Privremena lozinka *</label>
-                    <Input value={addForm.password}
+                    <Input type="password" value={addForm.password}
                       onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
-                      className="mt-1" placeholder="npr. Millimeter2026!" />
+                      className="mt-1" placeholder="npr. Lozinka123!" />
                     <p className="text-xs text-muted-foreground mt-1">Korisnik može promeniti lozinku nakon prve prijave</p>
                   </div>
                   <div>
