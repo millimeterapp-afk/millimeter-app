@@ -41,6 +41,7 @@ interface Item {
   templateType: string;
   templateSize: string;
   monogram: boolean;
+  monogramText: string;
   monogramPosition: string;
   monogramColor: string;
   monogramFont: string;
@@ -58,7 +59,7 @@ function emptyItem(): Item {
     artikal: "", quantity: 1, unitPrice: "", material: "",
     collarType: "Klasična", cuffType: "Jednostruka",
     templateType: "", templateSize: "",
-    monogram: false, monogramPosition: "Štej", monogramColor: "", monogramFont: "Pisano",
+    monogram: false, monogramText: "", monogramPosition: "Štej", monogramColor: "", monogramFont: "Pisano",
     showDetails: false,
   };
 }
@@ -140,7 +141,7 @@ export function NewOrderClient({
               cuffType: n.orderKind !== "gotov" ? it.cuffType : undefined,
               fitType: (it.templateType && it.templateSize) ? `${it.templateType} / ${it.templateSize}` : undefined,
               monogramData: it.monogram
-                ? { pozicija: it.monogramPosition, boja: it.monogramColor, font: it.monogramFont }
+                ? { tekst: it.monogramText, pozicija: it.monogramPosition, boja: it.monogramColor, font: it.monogramFont }
                 : undefined,
             })),
           })),
@@ -287,13 +288,13 @@ export function NewOrderClient({
                         <button onClick={() => updateItem(ni, ii, { showDetails: !it.showDetails })}
                           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${it.showDetails ? "rotate-180" : ""}`} />
-                          Krojački detalji (kragla, manžetna, šablon, inicijali)
+                          Krojački detalji (kragna, manžetna, šablon, inicijali)
                         </button>
                         {it.showDetails && (
                           <div className="space-y-3 pt-1">
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <label className="text-xs text-muted-foreground">Kragla</label>
+                                <label className="text-xs text-muted-foreground">Kragna</label>
                                 <select value={it.collarType} onChange={(e) => updateItem(ni, ii, { collarType: e.target.value })}
                                   className="w-full mt-1 border rounded-md px-2 py-1.5 text-sm bg-white">
                                   {["Klasična", "Talijanska", "Button-down", "Mao", "Windsor"].map((o) => <option key={o}>{o}</option>)}
@@ -345,16 +346,23 @@ export function NewOrderClient({
                               <label htmlFor={`mono-${ni}-${ii}`} className="text-sm">Inicijali</label>
                             </div>
                             {it.monogram && (
-                              <div className="grid grid-cols-3 gap-2">
-                                <select value={it.monogramPosition} onChange={(e) => updateItem(ni, ii, { monogramPosition: e.target.value })}
-                                  className="border rounded-md px-2 py-1.5 text-sm bg-white">
-                                  {["Štej", "Manžetna", "Prednjica"].map((o) => <option key={o}>{o}</option>)}
-                                </select>
-                                <Input value={it.monogramColor} onChange={(e) => updateItem(ni, ii, { monogramColor: e.target.value })} placeholder="Boja" className="text-sm" />
-                                <select value={it.monogramFont} onChange={(e) => updateItem(ni, ii, { monogramFont: e.target.value })}
-                                  className="border rounded-md px-2 py-1.5 text-sm bg-white">
-                                  {["Pisano", "Štampano — Ćirilica", "Pisano — Latinica", "Štampano — Latinica"].map((o) => <option key={o}>{o}</option>)}
-                                </select>
+                              <div className="space-y-2">
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Šta piše (inicijali)</label>
+                                  <Input value={it.monogramText} onChange={(e) => updateItem(ni, ii, { monogramText: e.target.value })}
+                                    placeholder="npr. P.P.  ili  M & P" className="mt-1 text-sm" />
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <select value={it.monogramPosition} onChange={(e) => updateItem(ni, ii, { monogramPosition: e.target.value })}
+                                    className="border rounded-md px-2 py-1.5 text-sm bg-white">
+                                    {["Štej", "Manžetna", "Prednjica"].map((o) => <option key={o}>{o}</option>)}
+                                  </select>
+                                  <Input value={it.monogramColor} onChange={(e) => updateItem(ni, ii, { monogramColor: e.target.value })} placeholder="Boja" className="text-sm" />
+                                  <select value={it.monogramFont} onChange={(e) => updateItem(ni, ii, { monogramFont: e.target.value })}
+                                    className="border rounded-md px-2 py-1.5 text-sm bg-white">
+                                    {["Pisano", "Štampano — Ćirilica", "Pisano — Latinica", "Štampano — Latinica"].map((o) => <option key={o}>{o}</option>)}
+                                  </select>
+                                </div>
                               </div>
                             )}
                           </div>

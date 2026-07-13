@@ -796,4 +796,18 @@ Model naloga se mora preraditi: **nova hijerarhija porudžbina→nalozi→stavke
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-12*
+## 23. Feedback runda + plan sprinta (2026-07-13)
+
+- **ROK: Nikola želi kraj 20–25. jula.** Plan izvršenja: `task_plan.md` + `progress.md` u root-u (počni sesiju od njih).
+- **📧 NOVO PRAVILO: Nikola (vlasnik) UVIJEK u CC na svim mejlovima** — njegov izričit zahtjev.
+- Aleksandar POTVRDIO model (porudžbina→nalozi→stavke, avansi, faze). Popravke koje traži: "Kragla"→**"Kragna"**, inicijali da imaju **slobodno tekst polje** (P.P., M & P), opcije kragni/manžetni proširiće kasnije.
+- **Munro nalog — Nikolina vizija: redirect na Munro (GoCreate) sajt + povratak u app.** Ne duboka integracija forme. Slim forma (kategorija artikla, cijena, rok) + dugme ka GoCreate. Detalji procesa TBD s njima.
+- Gotov proizvod: treća forma, spec šalju kasnije.
+- **`Nalog za kosulje.docx`** (Desktop, pročitan): spec domaćeg naloga — novi/postojeći šablon, vrat je ključ šablona ("Petar Petrović — šablon 42"), mere vrat/dužina/rukav/zglob kao brojke + ostale (grudi, struk, stomak, bokovi, aksla, satla, biceps, podlaktica) kao **+/- korekcije na šablon** (ograničenja TBD), materijal + boja, kragna/manžetna, **tux dugmići + skriveno kopčanje** (opciono), monogram (manžetna/štej/prednjica; boja konca; ćirilica/latinica/pisano/štampano), napomena za proizvodnju, radnik koji je napravio nalog.
+- **Spisak klijenata 2026**: Aleksandar podijelio Google Sheet na Matejev mejl. Problemi u podacima: bez telefona (kontakt=zaposleni ili prazno=stari klijent), formati 064-1234567 / +3xx, prazni redovi = više artikala istog klijenta, random bilješke, duplikati imena vode se kao "Petar Petrovic 2" / "Uros Nikolic Fudbaler" (namjerno različiti klijenti!), slovne greške. Za stare godine on samo sturo spaja (ime/prezime/telefon), mi čistimo skriptom.
+- Nikola razmišlja o **svom serveru u perspektivi** — nije sad; Supabase je čist Postgres pa je selidba kasnije izvodljiva. Rečeno mu "može".
+- Aleksandar tehnički radoznao (telekomunikacije) — slobodno objašnjavati detaljnije, voli da uči.
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-13*

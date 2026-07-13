@@ -335,7 +335,7 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
 
     const hasMonogram = measureData?.monogram_pozicija;
     const specs = [
-      order.collarType ? `Kragla: <strong>${order.collarType}</strong>` : null,
+      order.collarType ? `Kragna: <strong>${order.collarType}</strong>` : null,
       order.sleeveType ? `Manžetna: <strong>${order.sleeveType}</strong>` : null,
       order.fitType    ? `Fit: <strong>${order.fitType}</strong>`         : null,
     ].filter(Boolean).join(" &nbsp;·&nbsp; ");
@@ -348,13 +348,13 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
           ? `${order.items.length} stavki — ${kindLabels[order.orderKind] ?? "nalog"}`
           : "Nalog");
     const itemRows = order.items.map((it) => {
-      const mono = it.monogramData as { pozicija?: string; boja?: string; font?: string } | null;
+      const mono = it.monogramData as { tekst?: string; pozicija?: string; boja?: string; font?: string } | null;
       const detalji = [
         it.material ? `Mat: ${it.material}` : null,
-        it.collarType ? `Kragla: ${it.collarType}` : null,
+        it.collarType ? `Kragna: ${it.collarType}` : null,
         it.cuffType ? `Manž: ${it.cuffType}` : null,
         it.templateNumber ? `Šablon: ${it.templateNumber}` : null,
-        mono?.pozicija ? `Inicijali: ${mono.pozicija}${mono.boja ? `, ${mono.boja}` : ""}${mono.font ? `, ${mono.font}` : ""}` : null,
+        (mono?.tekst || mono?.pozicija) ? `Inicijali${mono?.tekst ? ` "${mono.tekst}"` : ""}${mono?.pozicija ? ` (${mono.pozicija}${mono?.boja ? `, ${mono.boja}` : ""}${mono?.font ? `, ${mono.font}` : ""})` : ""}` : null,
       ].filter(Boolean).join(" · ");
       return `<tr>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:600">${it.artikal}</td>
@@ -468,7 +468,7 @@ ${itemsSection}
   <div class="card">
     <div class="card-title">Specifikacija</div>
     ${order.material ? `<div class="card-row"><span class="lbl">Materijal</span><span class="val">${order.material}</span></div>` : ""}
-    ${order.collarType ? `<div class="card-row"><span class="lbl">Kragla</span><span class="val">${order.collarType}</span></div>` : ""}
+    ${order.collarType ? `<div class="card-row"><span class="lbl">Kragna</span><span class="val">${order.collarType}</span></div>` : ""}
     ${order.sleeveType ? `<div class="card-row"><span class="lbl">Manžetna</span><span class="val">${order.sleeveType}</span></div>` : ""}
     ${order.fitType ? `<div class="card-row"><span class="lbl">Fit</span><span class="val">${order.fitType}</span></div>` : ""}
   </div>
@@ -581,7 +581,7 @@ ${order.notes ? `
                 <select value={corrForm.correctionType}
                   onChange={(e) => setCorrForm({ ...corrForm, correctionType: e.target.value })}
                   className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
-                  {["Kroj", "Dužina", "Širina", "Rukav", "Kragla", "Šav", "Ostalo"].map(t => (
+                  {["Kroj", "Dužina", "Širina", "Rukav", "Kragna", "Šav", "Ostalo"].map(t => (
                     <option key={t}>{t}</option>
                   ))}
                 </select>
@@ -721,7 +721,7 @@ ${order.notes ? `
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { label: "Kragla", key: "collarType" as const, options: ["Klasična", "Talijanska", "Button-down", "Mao", "Windsor"] },
+                  { label: "Kragna", key: "collarType" as const, options: ["Klasična", "Talijanska", "Button-down", "Mao", "Windsor"] },
                   { label: "Rukav", key: "sleeveType" as const, options: ["Duga", "Kratka", "Dupla manžetna"] },
                   { label: "Fit", key: "fitType" as const, options: ["Slim fit", "Regular fit", "Comfort fit"] },
                 ].map(({ label, key, options }) => (
@@ -888,12 +888,14 @@ ${order.notes ? `
                 </thead>
                 <tbody>
                   {order.items.map((it) => {
+                    const mono = it.monogramData as { tekst?: string; pozicija?: string } | null;
                     const specs = [
                       it.material ? `Materijal: ${it.material}` : null,
-                      it.collarType ? `Kragla: ${it.collarType}` : null,
+                      it.collarType ? `Kragna: ${it.collarType}` : null,
                       it.cuffType ? `Manžetna: ${it.cuffType}` : null,
                       it.fitType ? `Fit: ${it.fitType}` : null,
                       it.templateNumber ? `Šablon: ${it.templateNumber}` : null,
+                      (mono?.tekst || mono?.pozicija) ? `Inicijali${mono?.tekst ? ` "${mono.tekst}"` : ""}${mono?.pozicija ? ` (${mono.pozicija})` : ""}` : null,
                     ].filter(Boolean).join(" · ");
                     return (
                       <tr key={it.id} className="border-b last:border-0">
@@ -941,7 +943,7 @@ ${order.notes ? `
               <div className="pt-3 border-t">
                 <p className="text-xs text-muted-foreground mb-2">Specifikacija</p>
                 <div className="flex gap-2 flex-wrap">
-                  {order.collarType && <span className="text-xs bg-muted px-2 py-1 rounded">Kragla: {order.collarType}</span>}
+                  {order.collarType && <span className="text-xs bg-muted px-2 py-1 rounded">Kragna: {order.collarType}</span>}
                   {order.sleeveType && <span className="text-xs bg-muted px-2 py-1 rounded">Rukav: {order.sleeveType}</span>}
                   {order.fitType && <span className="text-xs bg-muted px-2 py-1 rounded">Fit: {order.fitType}</span>}
                 </div>

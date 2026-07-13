@@ -141,7 +141,7 @@ export function CorrectionsClient({
                 <label className="text-xs font-medium text-muted-foreground">Tip korekcije</label>
                 <select value={form.correctionType} onChange={(e) => setForm({ ...form, correctionType: e.target.value })}
                   className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
-                  {["Rukav", "Kragla", "Grudi", "Struk", "Dužina", "Ramena", "Ostalo"].map(o => <option key={o}>{o}</option>)}
+                  {["Rukav", "Kragna", "Grudi", "Struk", "Dužina", "Ramena", "Ostalo"].map(o => <option key={o}>{o}</option>)}
                 </select>
               </div>
               <div>
