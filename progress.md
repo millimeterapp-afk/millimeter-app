@@ -28,5 +28,12 @@
 ## Novo pravilo komunikacije
 - 📧 Nikola UVIJEK u CC na mejlovima (njegov zahtjev, 13.7)
 
+## Urađeno (13.7 veče)
+- [2026-07-13] ✅ Faza A live: Kragla→Kragna svuda, polje za tekst inicijala (wizard + stavke + štampa). Commit 406f659
+- [2026-07-13] ✅ Munro API provjeren uživo: `Order/ByCustomerId` vraća status naloga (jedan klijent 8 naloga). Redirect potvrđen kao nužan (API ne pravi naloge). Vidi CLAUDE.md §24
+- [2026-07-13] ✅ Munro mejl poslat obojici (Nikola CC) da usaglase pristup
+
 ## Sledeći korak
-Opus: Faza A (A.1 Kragna → A.2 inicijali tekst → A.3 tux/skriveno), paralelno Matej pregleda CSV-e pa B.4 uvoz (companyId, BEZ GoCreate synca).
+1. Matej pregleda 3 lista u `Spisak klijenata 2026 - provera.xlsx` → „uvozi" → **Faza B.4** uvoz 673 klijenta (companyId, BEZ GoCreate synca).
+2. **Faza C** Munro slim nalog + dugme ka GoCreate — kad stigne odgovor na Munro mejl.
+3. A.3 (tux/skriveno kopčanje) batch-ovati sa Fazom D (schema promjena, jedan RLS re-apply).

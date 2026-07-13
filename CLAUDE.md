@@ -810,4 +810,22 @@ Model naloga se mora preraditi: **nova hijerarhija porudžbina→nalozi→stavke
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-13*
+## 24. Munro odluka + provjera + stanje (2026-07-13, veče)
+
+**Munro API — provjereno UŽIVO (read-only test):** `Order/ByCustomerId` vraća prave naloge sa popunjenim `Status` poljem. Testirano za 3 sinhronizovana klijenta iz naše baze: jedan ima 8 naloga (Knit/Jacket/Trousers/Shirt, format MILL.110.RS...), jedan 2, jedan 0. U uzorku su svi bili „Cancelled" (stari nalozi) — Status/OrderType/PPrice se vraćaju, DeliveryDate prazan za otkazane. Zaključak: **status iz Munra možemo da prikažemo, potvrđeno.**
+
+**Munro plan (FINALNO, po Nikoli + kod):**
+- **Redirect je NUŽAN, ne izbor.** API NE može da kreira nalog (nema Order/Add; kreiranje ide kroz FitProfile wizard sa internim šiframa/ID-jevima koji su nedokumentovani — v. §16). Zato Munro nalog kod nas = kratka forma (klijent, vrsta: odelo/pantalone/sako/košulja/prsluk..., cijena, rok) + dugme koje otvara GoCreate. Klijent se već sync-uje (`Customer/Add`, testirano).
+- **Status iz Munra:** prikaz je izvodljiv (već vučemo `getGoCreateOrders`). Caveat: `Order/ByCustomerId` vraća po KLIJENTU, ne po nalogu — kad klijent ima više Munro komada treba logika uparivanja (koji GoCreate nalog = koji naš nalog).
+- Nikolina zamisao (njegove reči): redirect na Munro → tamo napraviš nalog i staviš na hold ili platiš → vrati te kod nas da dodaš još nešto za klijenta ili da naplatiš.
+- **Munro mejl** poslat obojici (Nikola u CC) da usaglase redirect pristup + ponuda auto-statusa. Čeka njihov odgovor prije Faze C.
+
+**Stanje na kraju sesije 13.7:**
+- ✅ Faza A gotova i LIVE (Kragla→Kragna svuda; polje za tekst inicijala u wizardu + prikaz u stavkama i na štampi). Commit 406f659.
+- ✅ Klijenti 2026 očišćeni: 673 čista, 222 bez broja, 43 za provjeru — 3 lista u `Spisak klijenata 2026 - provera.xlsx` (Desktop). Skripta: scratchpad `ocisti-spisak.py`.
+- ⏭️ Sljedeće: **Faza B.4** uvoz 673 klijenta (čeka Matejev pregled CSV-ova → „uvozi"; companyId, BEZ GoCreate synca). Pa **Faza C** Munro slim nalog kad stigne njihov odgovor.
+- Plan detaljno: `task_plan.md` + `progress.md`.
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-13 (veče)*
