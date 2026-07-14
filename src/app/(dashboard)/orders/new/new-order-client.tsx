@@ -23,6 +23,13 @@ const kindHint: Record<OrderKind, string> = {
   gotov: "gotova roba / usluga",
 };
 
+// Munro vrste komada (Aleksandrov spisak). Dizajn opcije se biraju u Munru,
+// ne kod nas — njihov sistem ne dopušta kreiranje naloga spolja (v. CLAUDE.md §16/§24).
+const MUNRO_ARTIKLI = [
+  "Dvodelno odelo", "Trodelno odelo", "Sako", "Pantalone", "Prsluk",
+  "Košulja", "Knit", "Obuća", "Aksesoar",
+];
+
 // Auto-predlog roka po tipu (dana od danas)
 const kindRokDana: Record<OrderKind, number> = { domaca: 15, munro: 42, gotov: 7 };
 function rokZaKind(kind: OrderKind): string {
@@ -137,8 +144,8 @@ export function NewOrderClient({
               unitPrice: Number(it.unitPrice) || 0,
               material: it.material || undefined,
               templateNumber: (it.templateType && it.templateSize) ? `${it.templateType} ${it.templateSize}` : undefined,
-              collarType: n.orderKind !== "gotov" ? it.collarType : undefined,
-              cuffType: n.orderKind !== "gotov" ? it.cuffType : undefined,
+              collarType: n.orderKind === "domaca" ? it.collarType : undefined,
+              cuffType: n.orderKind === "domaca" ? it.cuffType : undefined,
               fitType: (it.templateType && it.templateSize) ? `${it.templateType} / ${it.templateSize}` : undefined,
               monogramData: it.monogram
                 ? { tekst: it.monogramText, pozicija: it.monogramPosition, boja: it.monogramColor, font: it.monogramFont }
@@ -258,10 +265,20 @@ export function NewOrderClient({
                     <div className="flex items-start gap-2">
                       <div className="flex-1">
                         <label className="text-xs font-medium text-muted-foreground">Artikal *</label>
-                        <input list="artikli" value={it.artikal}
-                          onChange={(e) => updateItem(ni, ii, { artikal: e.target.value })}
-                          className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
-                          placeholder="npr. Košulja Puplin IT021" />
+                        {nalog.orderKind === "munro" ? (
+                          // Munro: bira se vrsta komada. Dizajn detalji se unose u Munru, ne kod nas.
+                          <select value={it.artikal}
+                            onChange={(e) => updateItem(ni, ii, { artikal: e.target.value })}
+                            className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+                            <option value="">— Izaberi vrstu —</option>
+                            {MUNRO_ARTIKLI.map((a) => <option key={a} value={a}>{a}</option>)}
+                          </select>
+                        ) : (
+                          <input list="artikli" value={it.artikal}
+                            onChange={(e) => updateItem(ni, ii, { artikal: e.target.value })}
+                            className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
+                            placeholder="npr. Košulja Puplin IT021" />
+                        )}
                       </div>
                       {nalog.items.length > 1 && (
                         <button onClick={() => removeItem(ni, ii)} className="mt-6 text-muted-foreground hover:text-red-600">
@@ -282,8 +299,15 @@ export function NewOrderClient({
                       </div>
                     </div>
 
-                    {/* Krojački detalji — samo za domaća/munro */}
-                    {nalog.orderKind !== "gotov" && (
+                    {/* Munro: detalji se unose kod njih, ne kod nas */}
+                    {nalog.orderKind === "munro" && (
+                      <p className="text-xs text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-1.5">
+                        Mere i dizajn detalje unosiš u Munru. Posle kreiranja naloga imaš dugme „Otvori u GoCreate".
+                      </p>
+                    )}
+
+                    {/* Krojački detalji — samo za domaću proizvodnju */}
+                    {nalog.orderKind === "domaca" && (
                       <>
                         <button onClick={() => updateItem(ni, ii, { showDetails: !it.showDetails })}
                           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">

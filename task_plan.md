@@ -31,11 +31,12 @@ redirect na Munro sajt + povratak u app; CC Nikola na svim mejlovima.
 - [ ] B.5 Izvještaj Aleksandru: koliko uvezeno, koliko duplikata, koliko bez broja; pravila za godine unazad (on samo sturo spaja, mi čistimo)
 - [ ] B.6 NAPOMENA: uvezeni klijenti se NE sinhronizuju automatski u GoCreate (sync ide tek kad se pravi Munro nalog)
 
-### Faza C: Munro nalog po Nikolinoj zamisli (15–17.7)
-- [ ] C.1 Slim forma za Munro nalog u wizardu: artikal = padajući meni Munro kategorija (dvodelno odelo, pantalone, sako, košulja, prsluk, knit, obuća, aksesoar), cijena, rok — BEZ krojačkih detalja (oni se unose u Munro app)
-- [ ] C.2 Dugme "Otvori Munro" (GoCreate) na Munro nalogu — otvara njihov sajt u novom tabu; klijent je već sinhronizovan (postojeći syncCustomerToGoCreate)
-- [ ] C.3 Po povratku: na detalju naloga prikaz GoCreate porudžbina za tog klijenta već postoji (fetchGoCreateOrdersForCustomer) — provjeriti da radi za nove naloge
-- [ ] C.4 Pitati Nikolu/Aleksandra: da li da status Munro naloga povlačimo automatski iz GoCreate API-ja (imamo pristup) ili ručno mijenjaju faze
+### Faza C: Munro nalog po Nikolinoj zamisli (15–17.7) — ✅ ODOBRENO od Aleksandra 14.7
+- [x] C.1 Slim forma za Munro nalog u wizardu (15.7): artikal = padajući meni `MUNRO_ARTIKLI` (dvodelno/trodelno odelo, sako, pantalone, prsluk, košulja, knit, obuća, aksesoar); BEZ krojačkih detalja (kragna/manžetna/šablon/monogram sad samo za `domaca`); napomena radniku da detalje unosi u Munru
+- [x] C.2 Dugme "Otvori u GoCreate" — VEĆ POSTOJALO, deep-link `gocreate.nu/Customer/Detail/{gcId}?redirectToFitProfileTab=True` + fallback dugme "Sync u GoCreate" ako klijent nije sinhronizovan
+- [x] C.3 Prikaz GoCreate naloga sa statusom — VEĆ POSTOJALO na detalju naloga (GC_STATUS_COLORS) I na profilu klijenta (tabela: nalog, tip, tkanina, **status**, isporuka, HITNO flag). Aleksandrov zahtjev „dostupno čim otvorimo Klijenta" = već ispunjen
+- [x] C.4 Odgovor stigao: Aleksandar traži povlačenje statusa (✅ radi), slaže se da nema paralelnih opcija kod nas. „Neka Nikola da krajnji sud" — formalnost, redirect je Nikolina ideja
+- [ ] C.5 OSTALO: uparivanje GoCreate naloga sa NAŠIM nalogom kad klijent ima više Munro komada (`Order/ByCustomerId` vraća po klijentu). Trenutno se prikazuju svi klijentovi Munro nalozi — za većinu slučajeva dovoljno; uparivanje po OrderType/datumu tek ako zatraže
 
 ### Faza D: Domaći nalog v2 — spec iz docx (16–18.7, dio čeka definicije)
 - [ ] D.1 Header naloga: izbor "novi šablon / postojeći šablon" + koji kroj korišćen (Munro slim / Naš slim / Olimp već postoji kao šablon polje)

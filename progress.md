@@ -33,7 +33,13 @@
 - [2026-07-13] ✅ Munro API provjeren uživo: `Order/ByCustomerId` vraća status naloga (jedan klijent 8 naloga). Redirect potvrđen kao nužan (API ne pravi naloge). Vidi CLAUDE.md §24
 - [2026-07-13] ✅ Munro mejl poslat obojici (Nikola CC) da usaglase pristup
 
+## Novo (14.7 — Aleksandrovi odgovori)
+- ✅ **Munro pristup PRIHVAĆEN od Aleksandra** (mejl 14.7): slaže se da nema paralelnih opcija kod nas („sve povlačiti iz Munra"); njegove „druge opcije" su bile o papirnom nalogu u lokalu iz kog kucaju mere u Munro. **Izričito traži povlačenje statusa** — „da nam bude dostupno čim otvorimo Klijenta u našem appu". Formalno: „Neka Nikola da krajnji sud" (a redirect je Nikolina ideja → praktično odobreno).
+- ✅ Tabele: treću (dijele broj) potvrdio kao otac/sin ili greške u kucanju — lako rješava; drugu (bez broja) prolazi ime po ime, treba mu vremena. On pregleda naših 673 dok mi radimo dalje.
+- 📥 **2025 je već spremna u istom spreadsheetu**; godine idu **do 2017**, dodaje ih postepeno i javlja. (Ranije godine imaju manje porudžbina.)
+
 ## Sledeći korak
-1. Matej pregleda 3 lista u `Spisak klijenata 2026 - provera.xlsx` → „uvozi" → **Faza B.4** uvoz 673 klijenta (companyId, BEZ GoCreate synca).
-2. **Faza C** Munro slim nalog + dugme ka GoCreate — kad stigne odgovor na Munro mejl.
-3. A.3 (tux/skriveno kopčanje) batch-ovati sa Fazom D (schema promjena, jedan RLS re-apply).
+1. **Faza C kreće** (Munro slim nalog + dugme ka GoCreate + status iz Munra na nalogu i profilu klijenta) — Aleksandar potvrdio, Nikolin „krajnji sud" je formalnost jer je pristup njegova ideja. Napomena: profil klijenta VEĆ vuče GoCreate naloge — provjeriti da je status istaknut.
+2. **B.4 uvoz 673** — čeka Matejev „uvozi" (Aleksandrov pregled ide paralelno; korekcije se kasnije apliciraju kao izmjene).
+3. Kad Matej skine ažurirani sheet (2025+): dopuniti skriptu za više godina (dedup PREKO godina po telefonu, kolona godine/mjeseci).
+4. A.3 (tux/skriveno) batch sa Fazom D.
