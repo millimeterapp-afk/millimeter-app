@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { purchases, orders, orderItems, payments, customers } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
+import { calcLoyaltyTier } from "@/lib/loyalty";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -306,16 +307,77 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
   const companyId = dbUser.companyId!;
 
   await db.transaction(async (tx) => {
-    const [row] = await tx.update(orders)
+    // Stanje PRIJE promjene — bez ovoga bi ponovni klik na "Preuzeto"
+    // svaki put dodao isti iznos klijentu (duplirao novac).
+    const before = await tx.query.orders.findFirst({
+      where: (o, { eq, and }) => and(eq(o.id, nalogId), eq(o.companyId, companyId)),
+    });
+    if (!before) throw new Error("Nalog nije pronađen.");
+    if (before.nalogStatus === status) return; // ništa se ne mijenja
+
+    await tx.update(orders)
       .set({ nalogStatus: status, updatedAt: new Date() })
-      .where(and(eq(orders.id, nalogId), eq(orders.companyId, companyId)))
-      .returning({ purchaseId: orders.purchaseId });
+      .where(and(eq(orders.id, nalogId), eq(orders.companyId, companyId)));
+
     // Otkazivanje/vraćanje naloga mijenja ukupno porudžbine — preračunaj
-    if (row?.purchaseId) await tx.execute(recalcPurchaseTotalsSql(row.purchaseId, companyId));
+    if (before.purchaseId) await tx.execute(recalcPurchaseTotalsSql(before.purchaseId, companyId));
+
+    // ─── Statistika klijenta ─────────────────────────────────────────────
+    // Novac se pripisuje kad nalog stvarno ode klijentu ("preuzeto"),
+    // i skida ako se vrati nazad (npr. u korekciju).
+    const usaoUPreuzeto = status === "preuzeto";
+    const izasaoIzPreuzeto = before.nalogStatus === "preuzeto";
+    if (before.customerId && (usaoUPreuzeto || izasaoIzPreuzeto)) {
+      const delta = usaoUPreuzeto ? Number(before.totalAmount) : -Number(before.totalAmount);
+
+      const [updated] = await tx.update(customers)
+        .set({
+          totalSpent: sql`GREATEST(total_spent + ${delta}, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(customers.id, before.customerId), eq(customers.companyId, companyId)))
+        .returning({ totalSpent: customers.totalSpent });
+
+      if (updated) {
+        await tx.update(customers)
+          .set({ loyaltyTier: calcLoyaltyTier(Number(updated.totalSpent)) })
+          .where(eq(customers.id, before.customerId));
+      }
+
+      // Posjeta se broji po PORUDŽBINI, ne po nalogu — svadba sa tri naloga
+      // je jedan dolazak. Broji se kad zadnji aktivan nalog porudžbine ode.
+      if (usaoUPreuzeto) {
+        let porudzbinaZavrsena = true;
+        if (before.purchaseId) {
+          const preostali = await tx.query.orders.findMany({
+            where: (o, { eq, and, notInArray }) =>
+              and(eq(o.purchaseId, before.purchaseId!), notInArray(o.nalogStatus, ["preuzeto", "otkazano"])),
+          });
+          porudzbinaZavrsena = preostali.length === 0;
+        }
+        if (porudzbinaZavrsena) {
+          const danas = new Date().toISOString().split("T")[0];
+          await tx.update(customers)
+            .set({
+              visitCount: sql`visit_count + 1`,
+              lastVisitDate: danas,
+              firstVisitDate: sql`COALESCE(first_visit_date, ${danas})`,
+            })
+            .where(eq(customers.id, before.customerId));
+          if (before.purchaseId) {
+            await tx.update(purchases)
+              .set({ status: "completed", updatedAt: new Date() })
+              .where(and(eq(purchases.id, before.purchaseId), eq(purchases.companyId, companyId)));
+          }
+        }
+      }
+    }
   });
 
   revalidatePath("/orders");
   revalidatePath("/production");
+  revalidatePath("/customers");
+  revalidatePath("/dashboard");
 }
 
 // ─── updateOrderItems — izmjena stavki naloga poslije kreiranja ────────────────

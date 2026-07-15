@@ -7,6 +7,7 @@ import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders } from "@/lib/gocreate";
+import { calcLoyaltyTier } from "@/lib/loyalty";
 
 async function getCompanyId() {
   const supabase = await createClient();
@@ -192,12 +193,7 @@ export async function saveMeasurements(
   revalidatePath(`/customers/${customerId}`);
 }
 
-function calcLoyaltyTier(totalSpent: number): string {
-  if (totalSpent >= 3000) return "Platinum";
-  if (totalSpent >= 1500) return "Gold";
-  if (totalSpent >= 500) return "Silver";
-  return "Bronze";
-}
+// Pragovi su u RSD i žive u @/lib/loyalty (bili su zaostali iz EUR ere)
 
 export async function updateLoyaltyTier(customerId: string, newTotalSpent: number) {
   const tier = calcLoyaltyTier(newTotalSpent);
