@@ -48,8 +48,13 @@
   - **VAĐENJE ako zatreba:** `DELETE FROM customers WHERE notes LIKE 'Uvoz spiska 2026 (Aleksandar)%';` (čisto dok im se ne zakače nalozi)
   - Skripta: scratchpad `uvoz-klijenata.mjs` (dry-run po defaultu, `--izvrsi` za pravi uvoz)
 
+## Urađeno (15.7, nastavak)
+- [2026-07-15] ✅ **Faza E.1 gotova** (commit adc15cc): „preuzeto" pripisuje iznos klijentu (totalSpent + tier), korekcija ga skida; dupli klik ne duplira (čita se stanje prije promjene); **posjeta se broji po PORUDŽBINI** (svadba = 1 dolazak). Testirano na živoj bazi uz rollback.
+- [2026-07-15] 🐛 **Nađen i popravljen bug:** pragovi lojalnosti bili zaostali iz EUR ere (Platinum ≥ 3000) — u RSD bi svaka košulja dala Platinum. Preračunato u dinare (60k/175k/350k) u novom `src/lib/loyalty.ts`. **⚠️ PITATI NIKOLU/ALEKSANDRA da potvrde iznose — to je poslovna odluka.**
+
 ## Sledeći korak
-1. Kad Matej skine ažurirani sheet (2025 je spremna, ide do 2017): dopuniti skriptu za više godina — **dedup PREKO godina po telefonu** (klijent iz 2019 i 2026 = jedan), uz istu zaštitu (isti broj + različito ime = 2 osobe).
+1. **PITATI klijenta:** pragovi lojalnosti u dinarima (Silver 60.000 / Gold 175.000 / Platinum 350.000) — naš predlog, neka potvrde.
+2. Kad Matej skine ažurirani sheet (2025 je spremna, ide do 2017): dopuniti skriptu za više godina — **dedup PREKO godina po telefonu** (klijent iz 2019 i 2026 = jedan), uz istu zaštitu (isti broj + različito ime = 2 osobe). **Regex mora da vadi broj IZ teksta** (v. gore).
 2. **Faza D** domaći nalog v2 po `Nalog za kosulje.docx` (šablon+korekcije, radnik na nalogu, boja materijala) + A.3 tux/skriveno — batch schema promjena, jedan RLS re-apply.
 3. **Faza E** status→novac (čeka konačne nazive faza) + brisanje test podataka pred go-live.
 4. **Faza F** go-live gate (security-review, repo private, Supabase Pro, lozinka, RLS provjera).
