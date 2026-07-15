@@ -828,4 +828,28 @@ Model naloga se mora preraditi: **nova hijerarhija porudžbina→nalozi→stavke
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-13 (veče)*
+## 25. Stanje 2026-07-15 — Faze A, B, C, E.1 gotove
+
+### ✅ Završeno (sve live)
+- **Faza A** (406f659): „Kragla"→**„Kragna"** svuda; **polje za tekst inicijala** (P.P., M & P) u wizardu + prikaz u stavkama i na štampanom nalogu.
+- **Faza C** (682ea28) — Munro, ODOBRIO Aleksandar 14.7: artikal = padajući meni `MUNRO_ARTIKLI`; krojački detalji **samo za `domaca`** (Munro detalje unose kod njih); napomena radniku. **Otkriveno da je 2/3 već postojalo:** dugme „Otvori u GoCreate" (deep-link `Customer/Detail/{gcId}?redirectToFitProfileTab=True`) i prikaz Munro statusa na detalju naloga I na profilu klijenta.
+- **Faza B.4 UVOZ** — **678 pravih klijenata** u bazi (3 → 681). Tag: `notes LIKE 'Uvoz spiska 2026 (Aleksandar)%'`. **Vađenje:** `DELETE FROM customers WHERE notes LIKE 'Uvoz spiska 2026 (Aleksandar)%';` (čisto dok im se ne zakače nalozi).
+- **Faza E.1** (adc15cc): „preuzeto" pripisuje iznos klijentu (`totalSpent` + tier), korekcija skida; **dupli klik ne duplira** (čita stanje prije promjene); **posjeta se broji po PORUDŽBINI** (svadba = 1 dolazak); porudžbina se zatvara kad zadnji aktivan nalog ode. Testirano na živoj bazi uz rollback.
+
+### 🐛 Nađeni bugovi (popravljeni)
+- **Pragovi lojalnosti zaostali iz EUR ere** (Platinum ≥ 3000) — u RSD bi svaka košulja dala Platinum. Preračunato u dinare u novom `src/lib/loyalty.ts`: Silver 60.000 / Gold 175.000 / Platinum 350.000. **⚠️ ČEKA POTVRDU KLIJENTA — poslovna odluka.**
+- **Skripta za uvoz odbacivala validne brojeve** čim vidi slova (`063-575004 (Bojan)`, `063-8168942 MAMA`, `Igor 063-200670`). Spašeno 5. **Za dalje godine: regex mora da VADI broj iz teksta.**
+- `postgres-js` traži **snake_case** imena kolona (`company_id`, ne `companyId`) — drizzle mapira, raw postgres ne.
+
+### 📊 Uvoz — šta NIJE ušlo (rečeno Aleksandru)
+216 stvarno bez broja (133 prazno polje = stari klijent kome je broj upisan ranijih godina → očekuje se da se nađu kad uvezemo starije godine; 83 kontakt preko zaposlenog „Dimi"/„Miljko"/„Mama"); 7 brojeva bez imena (redovi 675, 895, 1193, 1375, 1469, 1498, 2187); 23 bilješke. **18 brojeva dijeli po 2 osobe → uvezeni kao posebni klijenti** (Aleksandar potvrdio: otac/sin ili greške u kucanju). 3 klijenta imaju ime u polju prezimena (greška izvornog sheeta).
+
+### ⏭️ Ostalo
+- **Faza D** (domaći nalog v2 po `Nalog za kosulje.docx`: šablon+korekcije mera, radnik na nalogu, boja materijala, tux/skriveno kopčanje) — **NE ŽURITI**: Aleksandar rekao da nalog „izgleda dobro" i da opcije/ograničenja šalje kasnije. Traži schema promjenu → batch u jedan potez, **preko Supabase MCP `apply_migration`, NE drizzle push** (§14: push briše RLS).
+- **Čeka klijenta:** nazivi faza, opcije kragni/manžetni + ograničenja korekcija, spec gotovog proizvoda, stare godine (2025 spremna, ide do 2017), presuda za 216 bez broja, **potvrda pragova lojalnosti**.
+- **Faza F go-live (20–25.7):** `/security-review`, repo → Private, Supabase Pro (bekapi), Nikolina lozinka, provjera RLS. **Sad ozbiljnije — u bazi su pravi podaci 678 ljudi.**
+- Skripte (scratchpad): `ocisti-spisak.py`, `uvoz-klijenata.mjs` (dry-run po defaultu, `--izvrsi`), `preuzeto-test.mjs`, `munro-status-test.mjs`.
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-15*
