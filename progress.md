@@ -40,7 +40,9 @@
 
 ## Urađeno (15.7)
 - [2026-07-15] ✅ **Faza C gotova i live** (commit 682ea28): Munro artikal = padajući meni vrsta, krojački detalji samo za `domaca`, napomena radniku. Otkriveno da su dugme „Otvori u GoCreate" (deep-link na FitProfile) i prikaz Munro statusa (detalj naloga + profil klijenta) **već postojali** — Aleksandrov zahtjev je time ispunjen.
-- [2026-07-15] ✅ **Faza B.4 UVOZ GOTOV**: 673 klijenta u bazi (3 → 676). Svi nose tag `notes = "Uvoz spiska 2026 (Aleksandar)"` + mjesece dolazaka.
+- [2026-07-15] ✅ **Faza B.4 UVOZ GOTOV**: **678 klijenata** u bazi (3 → 681). Svi nose tag `notes = "Uvoz spiska 2026 (Aleksandar)"` + mjesece dolazaka.
+  - 673 iz čistog spiska + **5 naknadno spašenih** (skripta ih je odbacila jer je uz broj bio dopisan tekst tipa `063-575004 (Bojan)`, `063-8168942 MAMA`, `Igor 063-200670`, `062-8802701 wa` — broj je ispravan, samo je čiji; original zapis sačuvan u napomeni). **Pouka za dalje godine: regex za telefon mora da vadi broj IZ teksta, ne da odbacuje red čim vidi slova.**
+  - NIJE uvezeno: **216 stvarno bez broja** (od toga 133 potpuno prazno polje = stari klijent, 83 kontakt preko zaposlenog tipa „Dimi"/„Miljko"/„Mama") + **7 brojeva koji stoje u redu bez imena** (vjerovatno pripadaju klijentu iznad).
   - Provjereno: 0 bez telefona, 0 pogrešna firma, 0 slučajno sync-ovano u GoCreate, 63 inostrana broja, 18 brojeva dijeli po 2 osobe (očekivano — porodice).
   - ⚠️ 3 klijenta imaju ime upisano u polje prezime (`""/"Biljana Zena"`, `""/"Dosic"`, `""/"Mandaric"`) — greška izvornog sheeta, ostavljeni kako jesu, Aleksandar prolazi spisak.
   - **VAĐENJE ako zatreba:** `DELETE FROM customers WHERE notes LIKE 'Uvoz spiska 2026 (Aleksandar)%';` (čisto dok im se ne zakače nalozi)
