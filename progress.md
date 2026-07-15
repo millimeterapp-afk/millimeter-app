@@ -38,8 +38,16 @@
 - ✅ Tabele: treću (dijele broj) potvrdio kao otac/sin ili greške u kucanju — lako rješava; drugu (bez broja) prolazi ime po ime, treba mu vremena. On pregleda naših 673 dok mi radimo dalje.
 - 📥 **2025 je već spremna u istom spreadsheetu**; godine idu **do 2017**, dodaje ih postepeno i javlja. (Ranije godine imaju manje porudžbina.)
 
+## Urađeno (15.7)
+- [2026-07-15] ✅ **Faza C gotova i live** (commit 682ea28): Munro artikal = padajući meni vrsta, krojački detalji samo za `domaca`, napomena radniku. Otkriveno da su dugme „Otvori u GoCreate" (deep-link na FitProfile) i prikaz Munro statusa (detalj naloga + profil klijenta) **već postojali** — Aleksandrov zahtjev je time ispunjen.
+- [2026-07-15] ✅ **Faza B.4 UVOZ GOTOV**: 673 klijenta u bazi (3 → 676). Svi nose tag `notes = "Uvoz spiska 2026 (Aleksandar)"` + mjesece dolazaka.
+  - Provjereno: 0 bez telefona, 0 pogrešna firma, 0 slučajno sync-ovano u GoCreate, 63 inostrana broja, 18 brojeva dijeli po 2 osobe (očekivano — porodice).
+  - ⚠️ 3 klijenta imaju ime upisano u polje prezime (`""/"Biljana Zena"`, `""/"Dosic"`, `""/"Mandaric"`) — greška izvornog sheeta, ostavljeni kako jesu, Aleksandar prolazi spisak.
+  - **VAĐENJE ako zatreba:** `DELETE FROM customers WHERE notes LIKE 'Uvoz spiska 2026 (Aleksandar)%';` (čisto dok im se ne zakače nalozi)
+  - Skripta: scratchpad `uvoz-klijenata.mjs` (dry-run po defaultu, `--izvrsi` za pravi uvoz)
+
 ## Sledeći korak
-1. **Faza C kreće** (Munro slim nalog + dugme ka GoCreate + status iz Munra na nalogu i profilu klijenta) — Aleksandar potvrdio, Nikolin „krajnji sud" je formalnost jer je pristup njegova ideja. Napomena: profil klijenta VEĆ vuče GoCreate naloge — provjeriti da je status istaknut.
-2. **B.4 uvoz 673** — čeka Matejev „uvozi" (Aleksandrov pregled ide paralelno; korekcije se kasnije apliciraju kao izmjene).
-3. Kad Matej skine ažurirani sheet (2025+): dopuniti skriptu za više godina (dedup PREKO godina po telefonu, kolona godine/mjeseci).
-4. A.3 (tux/skriveno) batch sa Fazom D.
+1. Kad Matej skine ažurirani sheet (2025 je spremna, ide do 2017): dopuniti skriptu za više godina — **dedup PREKO godina po telefonu** (klijent iz 2019 i 2026 = jedan), uz istu zaštitu (isti broj + različito ime = 2 osobe).
+2. **Faza D** domaći nalog v2 po `Nalog za kosulje.docx` (šablon+korekcije, radnik na nalogu, boja materijala) + A.3 tux/skriveno — batch schema promjena, jedan RLS re-apply.
+3. **Faza E** status→novac (čeka konačne nazive faza) + brisanje test podataka pred go-live.
+4. **Faza F** go-live gate (security-review, repo private, Supabase Pro, lozinka, RLS provjera).
