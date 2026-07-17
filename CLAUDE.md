@@ -852,4 +852,19 @@ Model naloga se mora preraditi: **nova hijerarhija porudžbina→nalozi→stavke
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-15*
+## 26. Pre-mortem + uvoz SVIH godina (2026-07-18)
+
+### ✅ SVI klijenti uvezeni — baza kompletna
+**4.346 klijenata** (2017–2026). Multi-year dedup po broju preko godina; 273 „bez broja" razriješeno imenom iz drugih godina; 43 bezimena broja izvađena naknadno. Tag: `notes LIKE 'Uvoz spiska 2017-2026%'` (stariji uvoz: `'Uvoz spiska 2026%'`). **Dokument neuvezenih:** `Neuvezeni klijenti - za kasnije.xlsx` (Desktop): 500 bez broja + 43 broja bez imena + 437 isti-broj-više-imena. 2018 čeka fajl.
+
+### Pre-mortem sažetak (pun u sesiji 18.7)
+- **Tigrovi:** Supabase Pro pred go-live (bekapi!); adoption radnika (faze moraju da se klikću — Aleksandar šampion); repo→Private; Nikolina lozinka; Codex Blok 2/3; vidljiva „Munro nedostupan" poruka umjesto tihe praznine; ne blokirati go-live čekanjem odgovora (faze rade i sa našim predlogom).
+- **Slonovi (imenovani):** dupli unos kasa+app je svjesna cijena (fiskalizacija ostaje van); bus factor riješen — **Matej naplaćuje mjesečni fee za održavanje**; granice 350€ opsega imenovati pri predaji.
+- **Troškovi:** fiksno samo Supabase Pro ~$25/mj (na kraju); Vercel free dok ne zatreba; **app.millimeter.rs = 0 RSD** (domen već plaćaju) — predlog za go-live.
+
+### Poslato klijentu 18.7
+Mejl sa **4 pitanja** (Munro tok radnje, gotov proizvod tok + da li oba načina, potvrda naziva faza, loginovi za ljude + pristup proizvodnje) + tabela 500 bez broja. Loyalty pragovi IZBAČENI iz mejla (Matejeva odluka — kasnije, kad app uđe u svakodnevnu upotrebu; defaulti 60k/175k/350k RSD rade u pozadini).
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-18*
