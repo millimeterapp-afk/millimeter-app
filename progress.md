@@ -52,6 +52,16 @@
 - [2026-07-15] ✅ **Faza E.1 gotova** (commit adc15cc): „preuzeto" pripisuje iznos klijentu (totalSpent + tier), korekcija ga skida; dupli klik ne duplira (čita se stanje prije promjene); **posjeta se broji po PORUDŽBINI** (svadba = 1 dolazak). Testirano na živoj bazi uz rollback.
 - [2026-07-15] 🐛 **Nađen i popravljen bug:** pragovi lojalnosti bili zaostali iz EUR ere (Platinum ≥ 3000) — u RSD bi svaka košulja dala Platinum. Preračunato u dinare (60k/175k/350k) u novom `src/lib/loyalty.ts`. **⚠️ PITATI NIKOLU/ALEKSANDRA da potvrde iznose — to je poslovna odluka.**
 
+## Urađeno (18.7 — Codex nezavisni review + Blok 1)
+- [2026-07-18] 🔍 **Codex (GPT) nezavisni review** — 15 nalaza, 4 launch-blockera. Potvrdio: moj „dupli klik" test bio sekvencijalan a ne konkurentan (race postojao!), stari+novi statusni sistem mogli duplo knjižiti, cross-tenant rupe u starim akcijama, isActive se nije provjeravao.
+- [2026-07-18] ✅ **Blok 1 ZAVRŠEN i live**: centralni `requireActiveUser` (isActive) u svih 11 action fajlova; FOR UPDATE lock u updateNalogStatus (+ simetričan izlazak iz preuzeto: reopen + poništavanje posjete); updateOrderStatus odbija purchase-backed naloge + sve scoped; saveMeasurements zaštićen; updateLoyaltyTier uklonjen iz javnog API-ja; doplata: lock + zabrana preplate; createSale potpuno prerađen; recalc CTE company filter; UI stari steper sakriven za porudžbine. **Dokazano konkurentnim testom sa 2 konekcije** (1 credit + 1 no-op).
+- [2026-07-18] 📥 Aleksandar: sve godine u sheetu OSIM 2018 (čeka fajl). Matej treba da skine sheet → multi-year import.
+
+## Ostalo iz Codex reviewa
+- Blok 2: idempotency ključ na createPurchase (dupla porudžbina na retry)
+- Blok 3: DB constraints/indeksi (apply_migration!), minimalna role matrica, validacioni sweep (appointments/corrections/suppliers/inventory), Beograd-datum helper, 6 ESLint grešaka
+- Na kraju: ponovni Codex prolaz da potvrdi
+
 ## Sledeći korak
 1. **PITATI klijenta:** pragovi lojalnosti u dinarima (Silver 60.000 / Gold 175.000 / Platinum 350.000) — naš predlog, neka potvrde.
 2. Kad Matej skine ažurirani sheet (2025 je spremna, ide do 2017): dopuniti skriptu za više godina — **dedup PREKO godina po telefonu** (klijent iz 2019 i 2026 = jedan), uz istu zaštitu (isti broj + različito ime = 2 osobe). **Regex mora da vadi broj IZ teksta** (v. gore).
