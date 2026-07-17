@@ -57,6 +57,9 @@
 - [2026-07-18] ✅ **Blok 1 ZAVRŠEN i live**: centralni `requireActiveUser` (isActive) u svih 11 action fajlova; FOR UPDATE lock u updateNalogStatus (+ simetričan izlazak iz preuzeto: reopen + poništavanje posjete); updateOrderStatus odbija purchase-backed naloge + sve scoped; saveMeasurements zaštićen; updateLoyaltyTier uklonjen iz javnog API-ja; doplata: lock + zabrana preplate; createSale potpuno prerađen; recalc CTE company filter; UI stari steper sakriven za porudžbine. **Dokazano konkurentnim testom sa 2 konekcije** (1 credit + 1 no-op).
 - [2026-07-18] 📥 Aleksandar: sve godine u sheetu OSIM 2018 (čeka fajl). Matej treba da skine sheet → multi-year import.
 
+## Urađeno (18.7 — sve godine klijenata)
+- [2026-07-18] ✅ Multi-year analiza `Spisak klijenata za Mateja po godinama.xlsx` (2017–2026, 2018 prazan): 8323 reda sa brojem + 1209 bez + 1099 artikal-šum → **4384 jedinstvena klijenta** (dedup preko godina po broju+imenu). 273 „bez broja" razriješeno uparivanjem imena iz drugih godina; **500 ostaje bez broja** (za Aleksandra); 437 slučajeva isti broj/više imena (porodice ili nadimci — uvoze se kao posebni). Dry-run vs baza: 676 već unutra, **3708 NOVIH → ~4389 ukupno**. CSV-i: `klijenti-SVE-*.csv` (Desktop). Skripta: scratchpad `ocisti-sve-godine.py`. **ČEKA MATEJEVO „uvozi".**
+
 ## Ostalo iz Codex reviewa
 - Blok 2: idempotency ključ na createPurchase (dupla porudžbina na retry)
 - Blok 3: DB constraints/indeksi (apply_migration!), minimalna role matrica, validacioni sweep (appointments/corrections/suppliers/inventory), Beograd-datum helper, 6 ESLint grešaka
