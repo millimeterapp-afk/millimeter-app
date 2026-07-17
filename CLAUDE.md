@@ -862,9 +862,27 @@ Model naloga se mora preraditi: **nova hijerarhija porudžbina→nalozi→stavke
 - **Slonovi (imenovani):** dupli unos kasa+app je svjesna cijena (fiskalizacija ostaje van); bus factor riješen — **Matej naplaćuje mjesečni fee za održavanje**; granice 350€ opsega imenovati pri predaji.
 - **Troškovi:** fiksno samo Supabase Pro ~$25/mj (na kraju); Vercel free dok ne zatreba; **app.millimeter.rs = 0 RSD** (domen već plaćaju) — predlog za go-live.
 
-### Poslato klijentu 18.7
-Mejl sa **4 pitanja** (Munro tok radnje, gotov proizvod tok + da li oba načina, potvrda naziva faza, loginovi za ljude + pristup proizvodnje) + tabela 500 bez broja. Loyalty pragovi IZBAČENI iz mejla (Matejeva odluka — kasnije, kad app uđe u svakodnevnu upotrebu; defaulti 60k/175k/350k RSD rade u pozadini).
+### Poslato klijentu 18.7 (✅ POTVRĐENO POSLATO — mejl + WhatsApp)
+**Mejl** (Aleksandar + Nikola CC, prilog: tabela 500 bez broja): svi klijenti od 2017 SU U APLIKACIJI (4.346), ~270 bez broja se samo razriješilo, ~200 brojeva dijele više imena (uvezeni kao posebni), 2018 čeka fajl. Plus **4 pitanja koja otključavaju srž**:
+1. **Munro tok radnje** (od naručivanja do preuzimanja — interne Munro faze već vučemo iz GoCreate)
+2. **Gotov proizvod tok** + potpitanje: da li može i „odmah ponese" i „naruči pa čeka" (ako oba → dva toka)
+3. **Potvrda naziva faza** (Naruceno / Ceka se materijal / Za izradu / U izradi / Gotovo / U radnji / Preuzeto / Korekcija — njegovo „Napraviti nalog" = naše „Za izradu")
+4. **Loginovi za ljude** + da li PROIZVODNJA (koleginice) dobija pristup da same prebace na „Gotova" ili radnja mijenja sve a njima se štampa papir
+Podsjetnici (ne blokiraju): opcije kragni/manžetni + ograničenja korekcija; artikli za gotov proizvod — **ako Octopos izveze Excel, šalje fajl pa uvozim; inače kuca spisak** (NE kačimo se na kasu — to je bila njegova formulacija „povući iz kase").
+**WhatsApp** Aleksandru: klijenti ubačeni, testiraj, pročitaj mejl, tabela 500 u prilogu mejla.
+Loyalty pragovi IZBAČENI iz mejla (Matejeva odluka — kasnije, kad app uđe u svakodnevnu upotrebu; defaulti 60k/175k/350k RSD rade u pozadini).
+
+### Evidencija klijenata — ko je gdje (VAŽNO za sve buduće uvoze)
+- **Uvezeni = baza je izvor istine.** Tagovi u `customers.notes`: `'Uvoz spiska 2026 (Aleksandar)'` (prvi uvoz, 678) i `'Uvoz spiska 2017-2026 (Aleksandar)'` (drugi, 3.665 neto posle vađenja 43 bezimena). Ukupno u bazi: **4.346**.
+- **Neuvezeni = `Neuvezeni klijenti - za kasnije.xlsx`** (Desktop), master fajl sa listom „Pregled" + 3 liste: Bez broja (500 — Aleksandar upisuje brojeve u kopiju poslatu mejlom, pa uvozimo iz nje), Broj bez imena (43), Isti broj više imena (437 — OVI JESU uvezeni kao posebni, popisani samo za kasnije spajanje).
+- Multi-year skripte u scratchpadu: `ocisti-sve-godine.py`, `uvoz-sve-godine.mjs`. **Pouka:** regex vadi broj IZ teksta; redovi sa brojem ali bez imena i prezimena NE ulaze (pripadaju klijentu iznad).
+
+### ⏭️ Sljedeće (stanje 18.7 uveče)
+1. Čekaju se odgovori na 4 pitanja (otključavaju faze po tipu naloga + loginove) — go-live NE blokira, postojeće faze rade.
+2. Na Claudeu: Codex Blok 2/3 (idempotency createPurchase, DB indeksi/constraints kroz apply_migration, role matrica, validacioni sweep, Beograd-datum helper, 6 ESLint grešaka), vidljiva „Munro nedostupan" poruka, pa ponovni Codex prolaz.
+3. Go-live gate (20–25.7): repo→Private, Supabase Pro (NA KRAJU — Matej potvrdio), Nikolina lozinka, brisanje test podataka (Test Testovic + 2 test naloga), `/security-review`, predlog `app.millimeter.rs` (domen već plaćaju, 0 ekstra).
+4. Matej: **naplaćivaće mjesečni fee za održavanje** poslije predaje (dogovoriti sa Nikolom pri primopredaji).
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-18*
+*CLAUDE.md ažuriran: 2026-07-18 (uveče)*
