@@ -22,3 +22,17 @@ export function calcLoyaltyTier(totalSpentRsd: number): LoyaltyTier {
   if (totalSpentRsd >= LOYALTY_THRESHOLDS_RSD.Silver) return "Silver";
   return "Bronze";
 }
+
+// Interni helper (NIJE server action — ovaj fajl nema "use server").
+// Zamjena za nekadašnji javno izvezeni updateLoyaltyTier koji je bio
+// pozivljiv spolja bez autentikacije i bez company provjere.
+import { db } from "@/lib/db";
+import { customers } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
+
+export async function applyLoyaltyTier(customerId: string, totalSpentRsd: number, companyId: string) {
+  await db
+    .update(customers)
+    .set({ loyaltyTier: calcLoyaltyTier(totalSpentRsd) })
+    .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
+}

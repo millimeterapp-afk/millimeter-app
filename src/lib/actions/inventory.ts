@@ -2,20 +2,14 @@
 
 import { db } from "@/lib/db";
 import { materials, inventoryItems, inventoryMovements } from "@/lib/db/schema";
-import { createClient } from "@/lib/supabase/server";
+
 import { eq, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireActiveUser } from "@/lib/auth";
 import * as XLSX from "xlsx";
 
 async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Nisi prijavljen");
-
-  const dbUser = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, user.id),
-  });
-  if (!dbUser?.companyId) throw new Error("Nemaš kompaniju");
+  const { user, dbUser } = await requireActiveUser();
   return { user, dbUser };
 }
 

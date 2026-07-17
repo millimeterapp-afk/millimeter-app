@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { purchases, orders, orderItems, payments, customers } from "@/lib/db/schema";
-import { createClient } from "@/lib/supabase/server";
+import { requireActiveUser } from "@/lib/auth";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -10,13 +10,7 @@ import { revalidatePath } from "next/cache";
 
 // ─── Auth helper ────────────────────────────────────────────────────────────
 async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Nisi prijavljen");
-  const dbUser = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, user.id),
-  });
-  if (!dbUser?.companyId) throw new Error("Nemaš kompaniju");
+  const { user, dbUser } = await requireActiveUser();
   return { user, dbUser };
 }
 
@@ -280,7 +274,7 @@ export async function getPurchase(id: string) {
 const recalcPurchaseTotalsSql = (purchaseId: string, companyId: string) => sql`
   WITH t AS (
     SELECT COALESCE(SUM(total_amount), 0) AS total
-    FROM orders WHERE purchase_id = ${purchaseId} AND nalog_status <> 'otkazano'
+    FROM orders WHERE purchase_id = ${purchaseId} AND company_id = ${companyId} AND nalog_status <> 'otkazano'
   )
   UPDATE purchases p
   SET total_amount = t.total,
@@ -307,51 +301,63 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
   const companyId = dbUser.companyId!;
 
   await db.transaction(async (tx) => {
-    // Stanje PRIJE promjene — bez ovoga bi ponovni klik na "Preuzeto"
-    // svaki put dodao isti iznos klijentu (duplirao novac).
-    const before = await tx.query.orders.findFirst({
+    // 1) Pronađi nalog (scoped) da saznamo porudžbinu
+    const peek = await tx.query.orders.findFirst({
       where: (o, { eq, and }) => and(eq(o.id, nalogId), eq(o.companyId, companyId)),
     });
+    if (!peek) throw new Error("Nalog nije pronađen.");
+
+    // 2) ZAKLJUČAVANJE (uvijek istim redoslijedom: porudžbina pa nalog).
+    // Bez ovoga dva PARALELNA zahtjeva oba pročitaju staro stanje i novac se
+    // knjiži duplo — sekvencijalni "dupli klik" test to ne hvata.
+    if (peek.purchaseId) {
+      await tx.execute(sql`SELECT id FROM purchases WHERE id = ${peek.purchaseId} AND company_id = ${companyId} FOR UPDATE`);
+    }
+    const lockedRows = (await tx.execute(
+      sql`SELECT id, nalog_status, total_amount, customer_id, purchase_id
+          FROM orders WHERE id = ${nalogId} AND company_id = ${companyId} FOR UPDATE`
+    )) as unknown as { id: string; nalog_status: string; total_amount: string; customer_id: string | null; purchase_id: string | null }[];
+    const before = lockedRows[0];
     if (!before) throw new Error("Nalog nije pronađen.");
-    if (before.nalogStatus === status) return; // ništa se ne mijenja
+    if (before.nalog_status === status) return; // no-op — drugi zahtjev je već prošao
 
     await tx.update(orders)
       .set({ nalogStatus: status, updatedAt: new Date() })
       .where(and(eq(orders.id, nalogId), eq(orders.companyId, companyId)));
 
     // Otkazivanje/vraćanje naloga mijenja ukupno porudžbine — preračunaj
-    if (before.purchaseId) await tx.execute(recalcPurchaseTotalsSql(before.purchaseId, companyId));
+    if (before.purchase_id) await tx.execute(recalcPurchaseTotalsSql(before.purchase_id, companyId));
 
     // ─── Statistika klijenta ─────────────────────────────────────────────
     // Novac se pripisuje kad nalog stvarno ode klijentu ("preuzeto"),
     // i skida ako se vrati nazad (npr. u korekciju).
     const usaoUPreuzeto = status === "preuzeto";
-    const izasaoIzPreuzeto = before.nalogStatus === "preuzeto";
-    if (before.customerId && (usaoUPreuzeto || izasaoIzPreuzeto)) {
-      const delta = usaoUPreuzeto ? Number(before.totalAmount) : -Number(before.totalAmount);
+    const izasaoIzPreuzeto = before.nalog_status === "preuzeto";
+    if (before.customer_id && (usaoUPreuzeto || izasaoIzPreuzeto)) {
+      const delta = usaoUPreuzeto ? Number(before.total_amount) : -Number(before.total_amount);
 
       const [updated] = await tx.update(customers)
         .set({
           totalSpent: sql`GREATEST(total_spent + ${delta}, 0)`,
           updatedAt: new Date(),
         })
-        .where(and(eq(customers.id, before.customerId), eq(customers.companyId, companyId)))
+        .where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)))
         .returning({ totalSpent: customers.totalSpent });
 
       if (updated) {
         await tx.update(customers)
           .set({ loyaltyTier: calcLoyaltyTier(Number(updated.totalSpent)) })
-          .where(eq(customers.id, before.customerId));
+          .where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
       }
 
       // Posjeta se broji po PORUDŽBINI, ne po nalogu — svadba sa tri naloga
       // je jedan dolazak. Broji se kad zadnji aktivan nalog porudžbine ode.
       if (usaoUPreuzeto) {
         let porudzbinaZavrsena = true;
-        if (before.purchaseId) {
+        if (before.purchase_id) {
           const preostali = await tx.query.orders.findMany({
             where: (o, { eq, and, notInArray }) =>
-              and(eq(o.purchaseId, before.purchaseId!), notInArray(o.nalogStatus, ["preuzeto", "otkazano"])),
+              and(eq(o.purchaseId, before.purchase_id!), notInArray(o.nalogStatus, ["preuzeto", "otkazano"])),
           });
           porudzbinaZavrsena = preostali.length === 0;
         }
@@ -363,12 +369,37 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
               lastVisitDate: danas,
               firstVisitDate: sql`COALESCE(first_visit_date, ${danas})`,
             })
-            .where(eq(customers.id, before.customerId));
-          if (before.purchaseId) {
+            .where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
+          if (before.purchase_id) {
             await tx.update(purchases)
               .set({ status: "completed", updatedAt: new Date() })
-              .where(and(eq(purchases.id, before.purchaseId), eq(purchases.companyId, companyId)));
+              .where(and(eq(purchases.id, before.purchase_id), eq(purchases.companyId, companyId)));
           }
+        }
+      }
+
+      // SIMETRIJA za izlazak iz "preuzeto": ako je porudžbina bila završena,
+      // vrati je na "open" i poništi posjetu — inače povratak u korekciju
+      // ostavlja lažnu posjetu, a ponovno preuzimanje je broji drugi put.
+      if (izasaoIzPreuzeto) {
+        let bilaZavrsena = false;
+        if (before.purchase_id) {
+          const p = (await tx.execute(
+            sql`SELECT status FROM purchases WHERE id = ${before.purchase_id} AND company_id = ${companyId}`
+          )) as unknown as { status: string }[];
+          bilaZavrsena = p[0]?.status === "completed";
+          if (bilaZavrsena) {
+            await tx.update(purchases)
+              .set({ status: "open", updatedAt: new Date() })
+              .where(and(eq(purchases.id, before.purchase_id), eq(purchases.companyId, companyId)));
+          }
+        } else {
+          bilaZavrsena = true; // legacy nalog bez porudžbine — posjeta je knjižena pri preuzimanju
+        }
+        if (bilaZavrsena) {
+          await tx.update(customers)
+            .set({ visitCount: sql`GREATEST(visit_count - 1, 0)` })
+            .where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
         }
       }
     }
@@ -451,19 +482,28 @@ export async function addPurchasePayment(
   const { user, dbUser } = await getCurrentUser();
   const companyId = dbUser.companyId!;
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Iznos mora biti broj > 0.");
+  if (!["cash", "card", "transfer"].includes(method)) throw new Error("Nepoznat način plaćanja.");
 
-  const purchase = await db.query.purchases.findFirst({
-    where: (p, { eq, and }) => and(eq(p.id, purchaseId), eq(p.companyId, companyId)),
-  });
-  if (!purchase) throw new Error("Porudžbina nije pronađena.");
-
-  // Transakcija + atomski increment (dvije istovremene uplate se ne gube)
+  // Zaključavanje porudžbine: paralelna dupla uplata (dva taba, retry) inače
+  // upiše obje i pređe preko ukupnog iznosa.
   await db.transaction(async (tx) => {
+    const rows = (await tx.execute(
+      sql`SELECT id, customer_id, total_amount, paid_amount FROM purchases
+          WHERE id = ${purchaseId} AND company_id = ${companyId} FOR UPDATE`
+    )) as unknown as { id: string; customer_id: string; total_amount: string; paid_amount: string }[];
+    const purchase = rows[0];
+    if (!purchase) throw new Error("Porudžbina nije pronađena.");
+
+    const remaining = Number(purchase.total_amount) - Number(purchase.paid_amount);
+    if (amount > remaining + 0.005) {
+      throw new Error(`Iznos je veći od preostalog duga (RSD ${Math.max(0, Math.round(remaining)).toLocaleString("sr-RS")}).`);
+    }
+
     await tx.insert(payments).values({
       companyId,
       referenceType: "purchase",
       referenceId: purchaseId,
-      customerId: purchase.customerId,
+      customerId: purchase.customer_id,
       amount: String(amount),
       paymentMethod: method,
       paymentDate: new Date().toISOString().split("T")[0],

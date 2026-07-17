@@ -194,7 +194,9 @@ export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDe
     setActionError("");
     startTransition(async () => {
       try {
-        await updateOrderStatus(order.id, "cancelled");
+        // Nalozi iz porudžbina idu kroz novi tok (stari je server-side odbijen)
+        if (order.purchaseId) await updateNalogStatus(order.id, "otkazano");
+        else await updateOrderStatus(order.id, "cancelled");
         router.refresh();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "Greška pri otkazivanju naloga.");
@@ -787,7 +789,8 @@ ${order.notes ? `
               Otkaži
             </button>
           )}
-          {nextStatus && nextActionLabels[order.status] && (
+          {/* Staro lifecycle dugme samo za legacy naloge — za porudžbine bi DUPLO knjižilo */}
+          {!hasPurchase && nextStatus && nextActionLabels[order.status] && (
             <button onClick={handleStatusChange} disabled={isPending}
               className="bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors disabled:opacity-50">
               {isPending ? "..." : nextActionLabels[order.status]}
@@ -802,7 +805,8 @@ ${order.notes ? `
         </div>
       )}
 
-      {/* Status timeline */}
+      {/* Status timeline — SAMO legacy nalozi; porudžbine koriste Fazu izrade */}
+      {!hasPurchase && (
       <Card>
         <CardContent className="pt-5 pb-5">
           <div className="flex items-center">
@@ -825,6 +829,7 @@ ${order.notes ? `
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Faza izrade — detaljni tok kroz radionicu (nalogStatus) */}
       <Card>

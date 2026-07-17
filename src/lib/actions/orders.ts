@@ -2,20 +2,14 @@
 
 import { db } from "@/lib/db";
 import { orders, materialReservations, productionTasks, materials, customers, customerMeasurements } from "@/lib/db/schema";
-import { updateLoyaltyTier, syncCustomerToGoCreate } from "@/lib/actions/customers";
-import { createClient } from "@/lib/supabase/server";
+import { syncCustomerToGoCreate } from "@/lib/actions/customers";
+import { applyLoyaltyTier } from "@/lib/loyalty";
+import { requireActiveUser } from "@/lib/auth";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Nisi prijavljen");
-
-  const dbUser = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, user.id),
-  });
-  if (!dbUser?.companyId) throw new Error("Nemaš kompaniju");
+  const { user, dbUser } = await requireActiveUser();
   return { user, dbUser };
 }
 
@@ -140,7 +134,22 @@ export async function updateOrderStatus(
   status: "draft" | "confirmed" | "in_production" | "ready" | "delivered" | "cancelled",
   options?: { materialQuantity?: number }
 ) {
-  const { user, dbUser } = await getCurrentUser();
+  const { dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
+
+  // Nalog MORA pripadati firmi — i provjera mora biti PRIJE svega ostalog.
+  // Bez ovoga bi UUID tuđeg naloga prošao prvi (scoped) UPDATE bez efekta,
+  // a ostatak funkcije bi dirao tuđe rezervacije/zalihe/klijente.
+  const order = await db.query.orders.findFirst({
+    where: (o, { eq, and }) => and(eq(o.id, id), eq(o.companyId, companyId)),
+  });
+  if (!order) throw new Error("Nalog nije pronađen.");
+
+  // Nalozi iz porudžbina se vode kroz novi tok (nalogStatus/updateNalogStatus).
+  // Stari lifecycle bi DUPLO knjižio novac i posjete — zabranjeno server-side.
+  if (order.purchaseId) {
+    throw new Error("Ovaj nalog pripada porudžbini — koristi 'Fazu izrade', ne stari tok.");
+  }
 
   const updates: Record<string, unknown> = { status, updatedAt: new Date() };
 
@@ -154,7 +163,7 @@ export async function updateOrderStatus(
   await db
     .update(orders)
     .set(updates)
-    .where(and(eq(orders.id, id), eq(orders.companyId, dbUser.companyId!)));
+    .where(and(eq(orders.id, id), eq(orders.companyId, companyId)));
 
   // Konzumiraj ili otpusti rezervaciju materijala
   if (status === "delivered" || status === "cancelled") {
@@ -183,11 +192,9 @@ export async function updateOrderStatus(
   }
 
   // Kad je isporučen — ažuriraj totalSpent i visitCount na klijentu
+  // (order je već učitan i provjereno pripada firmi)
   if (status === "delivered") {
-    const order = await db.query.orders.findFirst({
-      where: (o, { eq }) => eq(o.id, id),
-    });
-    if (order?.customerId) {
+    if (order.customerId) {
       await db
         .update(customers)
         .set({
@@ -196,27 +203,24 @@ export async function updateOrderStatus(
           lastVisitDate: new Date().toISOString().split("T")[0],
           updatedAt: new Date(),
         })
-        .where(eq(customers.id, order.customerId));
+        .where(and(eq(customers.id, order.customerId), eq(customers.companyId, companyId)));
 
       // Ažuriraj loyalty tier
       const updated = await db.query.customers.findFirst({
-        where: (c, { eq }) => eq(c.id, order.customerId!),
+        where: (c, { eq, and }) => and(eq(c.id, order.customerId!), eq(c.companyId, companyId)),
       });
       if (updated) {
-        await updateLoyaltyTier(order.customerId, Number(updated.totalSpent));
+        await applyLoyaltyTier(order.customerId, Number(updated.totalSpent), companyId);
       }
     }
   }
 
   // Rezerviši materijal kad nalog postane potvrđen
   if (status === "confirmed") {
-    const order = await db.query.orders.findFirst({
-      where: (o, { eq }) => eq(o.id, id),
-    });
-    if (order?.material) {
+    if (order.material) {
       const mat = await db.query.materials.findFirst({
         where: (m, { eq, and }) =>
-          and(eq(m.name, order.material!), eq(m.companyId, dbUser.companyId!)),
+          and(eq(m.name, order.material!), eq(m.companyId, companyId)),
       });
       if (mat) {
         const existing = await db.query.materialReservations.findFirst({
@@ -247,17 +251,13 @@ export async function updateOrderStatus(
     });
 
     if (!existing) {
-      const order = await db.query.orders.findFirst({
-        where: (o, { eq }) => eq(o.id, id),
-      });
-
       await db.insert(productionTasks).values({
-        companyId: dbUser.companyId!,
+        companyId,
         orderId: id,
         status: "queued",
         priority: "medium",
-        dueDate: order?.dueDate || null,
-        notesFromStore: order?.notes || null,
+        dueDate: order.dueDate || null,
+        notesFromStore: order.notes || null,
       });
     }
   }

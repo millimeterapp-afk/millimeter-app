@@ -2,19 +2,14 @@
 
 import { db } from "@/lib/db";
 import { orders, corrections, customers, materials } from "@/lib/db/schema";
-import { createClient } from "@/lib/supabase/server";
+
 import { eq, and, isNull, sql, notInArray, inArray } from "drizzle-orm";
+import { requireActiveUser } from "@/lib/auth";
 
 async function getCompanyId() {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const dbUser = await db.query.users.findFirst({
-      where: (u, { eq }) => eq(u.id, user.id),
-    });
-    return dbUser?.companyId ?? null;
+    const { companyId } = await requireActiveUser();
+    return companyId;
   } catch {
     return null;
   }

@@ -2,20 +2,13 @@
 
 import { db } from "@/lib/db";
 import { sales, saleItems, payments, inventoryItems, customers } from "@/lib/db/schema";
-import { createClient } from "@/lib/supabase/server";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { updateLoyaltyTier } from "@/lib/actions/customers";
+import { calcLoyaltyTier } from "@/lib/loyalty";
+import { requireActiveUser } from "@/lib/auth";
 
 async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Nisi prijavljen");
-
-  const dbUser = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, user.id),
-  });
-  if (!dbUser?.companyId) throw new Error("Nemaš kompaniju");
+  const { user, dbUser } = await requireActiveUser();
   return { user, dbUser };
 }
 
@@ -51,81 +44,118 @@ export async function createSale(data: {
     inventoryItemId?: string;
     quantity: number;
     unitPrice: number;
-    totalPrice: number;
   }>;
   notes?: string;
 }) {
   const { user, dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
 
-  const totalAmount = data.items.reduce((sum, item) => sum + item.totalPrice, 0);
-  const saleNumber = await generateSaleNumber(dbUser.companyId!);
-
-  const [sale] = await db
-    .insert(sales)
-    .values({
-      companyId: dbUser.companyId!,
-      saleNumber,
-      customerId: data.customerId || null,
-      createdBy: user.id,
-      paymentMethod: data.paymentMethod,
-      status: "completed",
-      totalAmount: String(totalAmount),
-      notes: data.notes || null,
-    })
-    .returning();
-
-  await db.insert(saleItems).values(
-    data.items.map((item) => ({
-      saleId: sale.id,
-      itemName: item.itemName,
-      inventoryItemId: item.inventoryItemId || null,
-      quantity: item.quantity,
-      unitPrice: String(item.unitPrice),
-      totalPrice: String(item.totalPrice),
-    }))
-  );
-
-  // Smanji stanje gotove robe
-  for (const item of data.items) {
-    if (item.inventoryItemId) {
-      await db
-        .update(inventoryItems)
-        .set({ quantity: sql`quantity - ${item.quantity}` })
-        .where(eq(inventoryItems.id, item.inventoryItemId));
-    }
+  // — Validacija: server računa novac, klijentu se ne vjeruje —
+  if (!["cash", "card", "transfer"].includes(data.paymentMethod))
+    throw new Error("Nepoznat način plaćanja.");
+  if (!Array.isArray(data.items) || data.items.length === 0)
+    throw new Error("Prodaja mora imati bar jednu stavku.");
+  for (const it of data.items) {
+    if (!it.itemName || !it.itemName.trim()) throw new Error("Svaka stavka mora imati naziv.");
+    if (!Number.isInteger(it.quantity) || it.quantity < 1) throw new Error("Količina mora biti cio broj ≥ 1.");
+    if (!Number.isFinite(it.unitPrice) || it.unitPrice < 0) throw new Error("Cena mora biti broj ≥ 0.");
   }
 
-  // Evidentiraj uplatu
-  await db.insert(payments).values({
-    companyId: dbUser.companyId!,
-    referenceType: "sale",
-    referenceId: sale.id,
-    customerId: data.customerId || null,
-    amount: String(totalAmount),
-    paymentMethod: data.paymentMethod,
-    paymentDate: new Date().toISOString().split("T")[0],
-    createdBy: user.id,
-  });
-
-  // Ažuriraj klijenta ako je vezan za prodaju
+  // Klijent (ako je naveden) mora pripadati firmi
   if (data.customerId) {
-    await db
-      .update(customers)
-      .set({
-        totalSpent: sql`total_spent + ${totalAmount}`,
-        visitCount: sql`visit_count + 1`,
-        lastVisitDate: new Date().toISOString().split("T")[0],
-        updatedAt: new Date(),
-      })
-      .where(eq(customers.id, data.customerId));
-
-    const updatedCustomer = await db.query.customers.findFirst({
-      where: (c, { eq }) => eq(c.id, data.customerId!),
+    const cust = await db.query.customers.findFirst({
+      where: (c, { eq, and, isNull }) =>
+        and(eq(c.id, data.customerId!), eq(c.companyId, companyId), isNull(c.deletedAt)),
     });
-    if (updatedCustomer) {
-      await updateLoyaltyTier(data.customerId, Number(updatedCustomer.totalSpent));
+    if (!cust) throw new Error("Klijent nije pronađen.");
+  }
+
+  // Artikli (ako su iz zaliha) moraju pripadati firmi
+  for (const it of data.items) {
+    if (it.inventoryItemId) {
+      const inv = await db.query.inventoryItems.findFirst({
+        where: (i, { eq, and }) => and(eq(i.id, it.inventoryItemId!), eq(i.companyId, companyId)),
+      });
+      if (!inv) throw new Error(`Artikal "${it.itemName}" nije pronađen u zalihama.`);
     }
   }
+
+  // totalPrice se računa OVDJE, ne prima od klijenta
+  const totalAmount = data.items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
+  const saleNumber = await generateSaleNumber(companyId);
+
+  // Sve u jednoj transakciji — nema prodaje bez stavki/uplate
+  const sale = await db.transaction(async (tx) => {
+    const [s] = await tx
+      .insert(sales)
+      .values({
+        companyId,
+        saleNumber,
+        customerId: data.customerId || null,
+        createdBy: user.id,
+        paymentMethod: data.paymentMethod,
+        status: "completed",
+        totalAmount: String(totalAmount),
+        notes: data.notes || null,
+      })
+      .returning();
+
+    await tx.insert(saleItems).values(
+      data.items.map((item) => ({
+        saleId: s.id,
+        itemName: item.itemName.trim(),
+        inventoryItemId: item.inventoryItemId || null,
+        quantity: item.quantity,
+        unitPrice: String(item.unitPrice),
+        totalPrice: String(item.unitPrice * item.quantity),
+      }))
+    );
+
+    // Smanji stanje gotove robe (scoped po firmi)
+    for (const item of data.items) {
+      if (item.inventoryItemId) {
+        await tx
+          .update(inventoryItems)
+          .set({ quantity: sql`quantity - ${item.quantity}` })
+          .where(and(eq(inventoryItems.id, item.inventoryItemId), eq(inventoryItems.companyId, companyId)));
+      }
+    }
+
+    // Evidentiraj uplatu
+    await tx.insert(payments).values({
+      companyId,
+      referenceType: "sale",
+      referenceId: s.id,
+      customerId: data.customerId || null,
+      amount: String(totalAmount),
+      paymentMethod: data.paymentMethod,
+      paymentDate: new Date().toISOString().split("T")[0],
+      createdBy: user.id,
+    });
+
+    // Ažuriraj klijenta ako je vezan za prodaju
+    if (data.customerId) {
+      const [updatedCustomer] = await tx
+        .update(customers)
+        .set({
+          totalSpent: sql`total_spent + ${totalAmount}`,
+          visitCount: sql`visit_count + 1`,
+          lastVisitDate: new Date().toISOString().split("T")[0],
+          updatedAt: new Date(),
+        })
+        .where(and(eq(customers.id, data.customerId), eq(customers.companyId, companyId)))
+        .returning({ totalSpent: customers.totalSpent });
+
+      if (updatedCustomer) {
+        await tx
+          .update(customers)
+          .set({ loyaltyTier: calcLoyaltyTier(Number(updatedCustomer.totalSpent)) })
+          .where(and(eq(customers.id, data.customerId), eq(customers.companyId, companyId)));
+      }
+    }
+
+    return s;
+  });
 
   revalidatePath("/sales");
   revalidatePath("/inventory");

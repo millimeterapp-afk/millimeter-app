@@ -7,18 +7,12 @@ import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders } from "@/lib/gocreate";
-import { calcLoyaltyTier } from "@/lib/loyalty";
+import { applyLoyaltyTier } from "@/lib/loyalty";
+import { requireActiveUser } from "@/lib/auth";
 
 async function getCompanyId() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Nisi prijavljen");
-
-  const dbUser = await db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, user.id),
-  });
-  if (!dbUser?.companyId) throw new Error("Nemaš kompaniju");
-  return dbUser.companyId;
+  const { companyId } = await requireActiveUser();
+  return companyId;
 }
 
 export async function getCustomers(search?: string) {
@@ -171,37 +165,37 @@ export async function saveMeasurements(
   customerId: string,
   data: Record<string, string>
 ) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Nisi prijavljen");
+  const { user, companyId } = await requireActiveUser();
 
-  // Deaktiviraj stara merenja
-  await db
-    .update(customerMeasurements)
-    .set({ isActive: false })
-    .where(eq(customerMeasurements.customerId, customerId));
+  // Klijent MORA pripadati firmi — bez ovoga bi UUID tuđeg klijenta
+  // deaktivirao njegova merenja (cross-tenant pisanje)
+  const customer = await db.query.customers.findFirst({
+    where: (c, { eq, and, isNull }) =>
+      and(eq(c.id, customerId), eq(c.companyId, companyId), isNull(c.deletedAt)),
+  });
+  if (!customer) throw new Error("Klijent nije pronađen.");
 
-  // Upiši nova
-  await db.insert(customerMeasurements).values({
-    customerId,
-    label: "košulja",
-    data,
-    isActive: true,
-    createdBy: user.id,
+  // Deaktivacija starih + upis novih — jedna transakcija
+  await db.transaction(async (tx) => {
+    await tx
+      .update(customerMeasurements)
+      .set({ isActive: false })
+      .where(eq(customerMeasurements.customerId, customerId));
+
+    await tx.insert(customerMeasurements).values({
+      customerId,
+      label: "košulja",
+      data,
+      isActive: true,
+      createdBy: user.id,
+    });
   });
 
   revalidatePath(`/customers/${customerId}`);
 }
 
-// Pragovi su u RSD i žive u @/lib/loyalty (bili su zaostali iz EUR ere)
-
-export async function updateLoyaltyTier(customerId: string, newTotalSpent: number) {
-  const tier = calcLoyaltyTier(newTotalSpent);
-  await db
-    .update(customers)
-    .set({ loyaltyTier: tier })
-    .where(eq(customers.id, customerId));
-}
+// Pragovi lojalnosti su u RSD i žive u @/lib/loyalty. Nekadašnji javni
+// updateLoyaltyTier je uklonjen — bio je server action bez autentikacije.
 
 export async function addHistoricalPurchase(
   customerId: string,
@@ -273,10 +267,10 @@ export async function addHistoricalPurchase(
     .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
 
   const updated = await db.query.customers.findFirst({
-    where: (c, { eq }) => eq(c.id, customerId),
+    where: (c, { eq, and }) => and(eq(c.id, customerId), eq(c.companyId, companyId)),
   });
   if (updated) {
-    await updateLoyaltyTier(customerId, Number(updated.totalSpent));
+    await applyLoyaltyTier(customerId, Number(updated.totalSpent), companyId);
   }
 
   revalidatePath(`/customers/${customerId}`);
