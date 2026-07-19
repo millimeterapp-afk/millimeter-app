@@ -64,10 +64,23 @@
 - [2026-07-19] 📧 **STIGLI ODGOVORI**: Nikola (novi zahtjevi: GoCreate kupci+porudžbine spajanje, artikli „iz Admina", top-po-godini filter, UBRZATI app) i Aleksandar (faze+nazivi POTVRĐENI, gotov proizvod detaljno — prost nalog + opciona korekcija, partneri: Doucals/Gran Sasso/Falke/Barmas/Gherardi/aksesoari/neprodati komadi; Munro tok stiže kao Word; loginovi DA — radnja svako svoj, proizvodnja JEDAN prost nalog; komentari po modulima stižu u fajlu)
 - [2026-07-19] ⚡ **Performanse popravljene** (Nikolina primjedba): 10 DB indeksa; /customers server paginacija+pretraga; dashboard/reports agregati; wizard server pretraga. Puna lista od 4.346 klijenata više NE putuje u browser. Follow-up: appointments/corrections/sales pickeri.
 
-## Ostalo iz Codex reviewa
-- Blok 2: idempotency ključ na createPurchase (dupla porudžbina na retry)
-- Blok 3: DB constraints/indeksi (apply_migration!), minimalna role matrica, validacioni sweep (appointments/corrections/suppliers/inventory), Beograd-datum helper, 6 ESLint grešaka
-- Na kraju: ponovni Codex prolaz da potvrdi
+## Urađeno (19.7 — Codex Blok 2/3 + čišćenje pred go-live)
+- [2026-07-19] ✅ **Faza E.2**: obrisani SVI test podaci (5 naloga, 1 porudžbina, Test Testovic); statistika klijenata resetovana; brojači POR/NAL na 1. Ostalo **4345 pravih klijenata**. Skripta: scratchpad `ciscenje-test.mjs`.
+- [2026-07-19] ✅ **DB backstop constraints** (raw SQL, NE drizzle push): unique (company_id, broj) na purchases/orders; CHECK ne-negativni iznosi (purchases/orders/order_items/payments). RLS provjeren 5/5, check dokazano odbija negativan.
+- [2026-07-19] ✅ **Idempotency createPurchase**: `idempotency_key` kolona + partial unique index + wizard šalje ključ po formi → retry vraća postojeću porudžbinu.
+- [2026-07-19] ✅ **Beograd datum** (`@/lib/datetime`): sve uplate/posjete po lokalnom danu, ne UTC.
+- [2026-07-19] ✅ **Validacioni sweep**: createAppointment/createCorrection/createSupplierInvoice/receiveMaterial/receiveInventoryItem — tenant provjera stranih ID-eva, odbijanje negativnih, prijem u transakciji. createSupplierInvoice cross-tenant rupa (update materijala/artikla) zatvorena.
+- [2026-07-19] ✅ **ESLint 6 grešaka → 0** (13 bezopasnih warninga ostaje, npr. SHOP_ID).
+
+## Ostalo iz Codex reviewa (za sledeći put)
+- **Role matrica** (nalaz 10) — Aleksandar traži (svako svoj nalog + ograničenja; proizvodnja jedan prost). ČEKA Nikolinu potvrdu tačnih prava. Mehanizam `requireActiveUser` je spreman za proširenje sa rolama.
+- **postInvoice concurrency** (nalaz 11) — supplier modul, rijedak; createSupplierInvoice već popravljen, ostaje transakciono omotati postInvoice.
+- **Ponovni Codex prolaz** da potvrdi Blok 1+2+3.
+
+## Traženo od klijenta (mejl 19.7)
+- Aleksandrov Word za Munro tok radnje; komentari po modulima; 500 bez broja (radi od ponedeljka)
+- Nikola: šta je „Admin" za artikle (kasa Octopos izvoz?); potvrda role matrice
+- Munro spajanje kupaca+porudžbina (Nikolin zahtjev) — veći posao posle osnovnih
 
 ## Sledeći korak
 1. **PITATI klijenta:** pragovi lojalnosti u dinarima (Silver 60.000 / Gold 175.000 / Platinum 350.000) — naš predlog, neka potvrde.
