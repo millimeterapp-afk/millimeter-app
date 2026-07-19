@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, materialReservations, productionTasks, materials, customers, customerMeasurements } from "@/lib/db/schema";
+import { orders, materialReservations, productionTasks, materials, customers } from "@/lib/db/schema";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { applyLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";

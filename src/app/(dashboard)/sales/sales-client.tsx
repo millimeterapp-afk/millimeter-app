@@ -221,7 +221,7 @@ export function SalesClient({
                 );
               })}
               {filtered.length === 0 && search && (
-                <p className="col-span-2 text-center py-6 text-sm text-muted-foreground">Nema rezultata za "{search}"</p>
+                <p className="col-span-2 text-center py-6 text-sm text-muted-foreground">Nema rezultata za &quot;{search}&quot;</p>
               )}
             </div>
           )}

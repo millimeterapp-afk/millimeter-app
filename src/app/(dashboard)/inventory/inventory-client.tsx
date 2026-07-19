@@ -332,7 +332,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                 </div>
               </div>
               <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
-                Notifikacija "Niske zalihe" se prikazuje kada je slobodna količina ispod minimalnog nivoa.
+                Notifikacija &quot;Niske zalihe&quot; se prikazuje kada je slobodna količina ispod minimalnog nivoa.
               </p>
               <div className="flex gap-2 pt-2">
                 <button type="button" onClick={() => setEditMaterial(null)} className="flex-1 border rounded-md py-2 text-sm hover:bg-muted">Otkaži</button>

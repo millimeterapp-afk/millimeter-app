@@ -5,7 +5,7 @@ import { purchases, orders, orderItems, payments, customers } from "@/lib/db/sch
 import { requireActiveUser } from "@/lib/auth";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { calcLoyaltyTier } from "@/lib/loyalty";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 

@@ -321,7 +321,7 @@ export function NewOrderClient({
                     {/* Munro: detalji se unose kod njih, ne kod nas */}
                     {nalog.orderKind === "munro" && (
                       <p className="text-xs text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-1.5">
-                        Mere i dizajn detalje unosiš u Munru. Posle kreiranja naloga imaš dugme „Otvori u GoCreate".
+                        Mere i dizajn detalje unosiš u Munru. Posle kreiranja naloga imaš dugme „Otvori u GoCreate&rdquo;.
                       </p>
                     )}
 
