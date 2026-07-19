@@ -1,15 +1,15 @@
 import { Suspense } from "react";
-import { getCustomers } from "@/lib/actions/customers";
 import { getMaterials, getInventoryItems } from "@/lib/actions/inventory";
 import { NewOrderClient } from "./new-order-client";
 
 async function NewOrderContent() {
-  const [customers, materials, inventoryItems] = await Promise.all([
-    getCustomers(),
+  // Klijenti se NE šalju svi u browser (4.000+) — wizard ih traži
+  // serverskom pretragom (searchCustomersLite)
+  const [materials, inventoryItems] = await Promise.all([
     getMaterials(),
     getInventoryItems(),
   ]);
-  return <NewOrderClient customers={customers} materials={materials} inventoryItems={inventoryItems} />;
+  return <NewOrderClient materials={materials} inventoryItems={inventoryItems} />;
 }
 
 export default function NewOrderPage() {

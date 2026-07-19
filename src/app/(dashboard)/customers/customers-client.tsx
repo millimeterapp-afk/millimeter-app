@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomer, importCustomers, generateCustomerTemplate } from "@/lib/actions/customers";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,28 +23,46 @@ const emptyForm = {
 
 const PAGE_SIZE = 25;
 
-export function CustomersClient({ customers }: { customers: Customer[] }) {
+interface CustomerStats {
+  total: number;
+  newThisMonth: number;
+  loyalty: Record<string, number>;
+}
+
+export function CustomersClient({
+  customers, total, q, page, stats,
+}: {
+  customers: Customer[];
+  total: number;
+  q: string;
+  page: number;
+  stats: CustomerStats;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [search, setSearch] = useState("");
+  // Pretraga i paginacija idu preko URL-a — server vraća samo jednu stranicu
+  // (4.000+ klijenata više ne putuje u browser)
+  const [search, setSearch] = useState(q);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
-  const [page, setPage] = useState(1);
   const [importResult, setImportResult] = useState<{ inserted: number; skipped: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const allFiltered = customers.filter((c) => {
-    const q = search.toLowerCase();
-    return (
-      `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-      (c.email ?? "").toLowerCase().includes(q) ||
-      c.phone.includes(q) ||
-      (c.city ?? "").toLowerCase().includes(q)
-    );
-  });
-  const totalPages = Math.ceil(allFiltered.length / PAGE_SIZE);
-  const filtered = allFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (search !== q) {
+        router.replace(`/customers?q=${encodeURIComponent(search)}`);
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search, q, router]);
+
+  const goToPage = (p: number) =>
+    router.replace(`/customers?q=${encodeURIComponent(q)}&page=${p}`);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const filtered = customers;
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,15 +112,15 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
     });
   };
 
-  const platinum = customers.filter(c => c.loyaltyTier === "Platinum").length;
-  const gold = customers.filter(c => c.loyaltyTier === "Gold").length;
+  const platinum = stats.loyalty["Platinum"] ?? 0;
+  const gold = stats.loyalty["Gold"] ?? 0;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Klijenti</h1>
-          <p className="text-muted-foreground text-sm mt-1">{customers.length} ukupno klijenata</p>
+          <p className="text-muted-foreground text-sm mt-1">{stats.total} ukupno klijenata</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleDownloadTemplate} disabled={isPending}
@@ -202,15 +220,10 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Ukupno", value: String(customers.length) },
+          { label: "Ukupno", value: String(stats.total) },
           { label: "Platinum", value: String(platinum) },
           { label: "Gold", value: String(gold) },
-          { label: "Novi ovaj mesec", value: String(customers.filter(c => {
-            if (!c.createdAt) return false;
-            const d = new Date(c.createdAt);
-            const now = new Date();
-            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-          }).length) },
+          { label: "Novi ovaj mesec", value: String(stats.newThisMonth) },
         ].map((s) => (
           <Card key={s.label}><CardContent className="pt-4 pb-4">
             <p className="text-sm text-muted-foreground">{s.label}</p>
@@ -221,7 +234,7 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input placeholder="Pretraži klijente..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+        <Input placeholder="Pretraži klijente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       <Card>
@@ -279,18 +292,18 @@ export function CustomersClient({ customers }: { customers: Customer[] }) {
           </table>
           {filtered.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              {search ? `Nema rezultata za "${search}"` : "Nema klijenata. Dodaj prvog!"}
+              {q ? `Nema rezultata za "${q}"` : "Nema klijenata. Dodaj prvog!"}
             </div>
           )}
           </div>
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
-              <span>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, allFiltered.length)} od {allFiltered.length}</span>
+              <span>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} od {total}</span>
               <div className="flex gap-1">
-                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                <button onClick={() => goToPage(Math.max(1, page - 1))} disabled={page === 1}
                   className="px-3 py-1 border rounded hover:bg-muted disabled:opacity-40 transition-colors">←</button>
                 <span className="px-3 py-1">{page} / {totalPages}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                <button onClick={() => goToPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
                   className="px-3 py-1 border rounded hover:bg-muted disabled:opacity-40 transition-colors">→</button>
               </div>
             </div>

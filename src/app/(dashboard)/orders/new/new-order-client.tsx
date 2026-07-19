@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPurchase } from "@/lib/actions/purchases";
+import { searchCustomersLite } from "@/lib/actions/customers";
 import { ArrowLeft, ArrowRight, Check, Plus, Trash2, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -75,32 +76,46 @@ function emptyNalog(kind: OrderKind = "domaca"): Nalog {
 }
 
 export function NewOrderClient({
-  customers, materials, inventoryItems,
-}: { customers: Customer[]; materials: Material[]; inventoryItems: InventoryItem[] }) {
+  materials, inventoryItems,
+}: { materials: Material[]; inventoryItems: InventoryItem[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedCustomerId = searchParams.get("customerId") ?? "";
 
   const [isPending, startTransition] = useTransition();
   const [step, setStep] = useState(preselectedCustomerId ? 1 : 0);
-  const [customerId, setCustomerId] = useState(preselectedCustomerId);
   const [customerSearch, setCustomerSearch] = useState("");
+  // Klijenti se traže na serveru (4.000+ ih je) — u browseru je samo rezultat
+  const [customerResults, setCustomerResults] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [searching, setSearching] = useState(false);
+  const customerId = selectedCustomer?.id ?? "";
+
+  useEffect(() => {
+    if (preselectedCustomerId) {
+      searchCustomersLite("", preselectedCustomerId).then((r) => {
+        if (r[0]) setSelectedCustomer(r[0]);
+      });
+    }
+  }, [preselectedCustomerId]);
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const q = customerSearch.trim();
+      if (q.length < 2) { setCustomerResults([]); return; }
+      setSearching(true);
+      try { setCustomerResults(await searchCustomersLite(q)); }
+      finally { setSearching(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [customerSearch]);
   const [nalozi, setNalozi] = useState<Nalog[]>([emptyNalog()]);
   const [avans, setAvans] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("cash");
   const [purchaseNotes, setPurchaseNotes] = useState("");
   const [error, setError] = useState("");
 
-  const selectedCustomer = customers.find((c) => c.id === customerId);
   const fabrics = materials.filter((m) => m.category === "Tkanina" || m.category === "Postava");
-
-  // Pretraga klijenata (ime, prezime, telefon) — bez nje je korak 1
-  // neupotrebljiv kad se uveze pun spisak klijenata
-  const q = customerSearch.trim().toLowerCase();
-  const filteredCustomers = q
-    ? customers.filter((c) =>
-        `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) || (c.phone ?? "").includes(q))
-    : customers;
 
   // — Izračun ukupne sume —
   const total = useMemo(
@@ -190,22 +205,27 @@ export function NewOrderClient({
       {step === 0 && (
         <div className="bg-white border rounded-xl p-6 space-y-4">
           <h2 className="font-medium">Odaberi klijenta</h2>
-          {customers.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="text-sm">Nema klijenata.</p>
-              <Link href="/customers" className="text-sm text-black underline mt-1 inline-block">Dodaj klijenta →</Link>
+          {selectedCustomer && (
+            <div className="flex items-center gap-3 p-3 rounded-lg border border-black bg-black/5">
+              <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center text-xs font-medium shrink-0">
+                {selectedCustomer.firstName[0] ?? ""}{selectedCustomer.lastName[0] ?? ""}
+              </div>
+              <div>
+                <p className="text-sm font-medium">{selectedCustomer.firstName} {selectedCustomer.lastName}</p>
+                <p className="text-xs text-muted-foreground">{selectedCustomer.phone} · {selectedCustomer.templateNumber ?? "—"}</p>
+              </div>
+              <Check className="w-4 h-4 ml-auto text-black" />
             </div>
           )}
-          {customers.length > 0 && (
-            <Input value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)}
-              placeholder="Pretraži po imenu ili telefonu..." autoFocus />
-          )}
+          <Input value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)}
+            placeholder="Kucaj ime ili telefon (bar 2 slova)..." autoFocus />
           <div className="space-y-2 max-h-80 overflow-y-auto">
-            {filteredCustomers.length === 0 && q && (
+            {searching && <p className="text-sm text-muted-foreground text-center py-2">Tražim...</p>}
+            {!searching && customerResults.length === 0 && customerSearch.trim().length >= 2 && (
               <p className="text-sm text-muted-foreground text-center py-4">Nema rezultata za &quot;{customerSearch}&quot;</p>
             )}
-            {filteredCustomers.slice(0, 50).map((c) => (
-              <button key={c.id} onClick={() => setCustomerId(c.id)}
+            {customerResults.map((c) => (
+              <button key={c.id} onClick={() => { setSelectedCustomer(c); setCustomerSearch(""); }}
                 className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border transition-colors
                   ${customerId === c.id ? "border-black bg-black/5" : "border-transparent hover:bg-muted/50"}`}>
                 <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center text-xs font-medium shrink-0">
@@ -218,11 +238,6 @@ export function NewOrderClient({
                 {customerId === c.id && <Check className="w-4 h-4 ml-auto text-black" />}
               </button>
             ))}
-            {filteredCustomers.length > 50 && (
-              <p className="text-xs text-muted-foreground text-center py-2">
-                Prikazano prvih 50 — suzi pretragu
-              </p>
-            )}
           </div>
         </div>
       )}

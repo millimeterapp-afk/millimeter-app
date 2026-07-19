@@ -54,12 +54,19 @@ const typeLabels: Record<string, string> = {
   konsultacija: "Konsultacija", ostalo: "Ostalo",
 };
 
+interface CustomerStats {
+  total: number;
+  newThisMonth: number;
+  top: { id: string; firstName: string; lastName: string; totalSpent: string }[];
+  loyalty: Record<string, number>;
+}
+
 export function DashboardClient({
-  nalozi, payments, customers, corrections, todayAppointments,
+  nalozi, payments, customerStats, corrections, todayAppointments,
 }: {
   nalozi: Nalog[];
   payments: { amount: string; paymentDate: string }[];
-  customers: Customer[];
+  customerStats: CustomerStats;
   corrections: Correction[];
   todayAppointments: AppointmentWithCustomer[];
 }) {
@@ -102,9 +109,7 @@ export function DashboardClient({
     .sort((a, b) => a.sort.localeCompare(b.sort))
     .map((r) => ({ month: r.label, prihod: r.amount }));
 
-  const topCustomers = [...customers]
-    .sort((a, b) => Number(b.totalSpent) - Number(a.totalSpent))
-    .slice(0, 3);
+  const topCustomers = customerStats.top.slice(0, 3);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -171,13 +176,8 @@ export function DashboardClient({
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Klijenti ukupno</p>
-                  <p className="text-2xl font-bold mt-1">{customers.length}</p>
-                  <p className="text-xs text-green-600 mt-1">
-                    +{customers.filter(c => {
-                      const d = new Date(c.createdAt);
-                      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                    }).length} ovaj mesec
-                  </p>
+                  <p className="text-2xl font-bold mt-1">{customerStats.total}</p>
+                  <p className="text-xs text-green-600 mt-1">+{customerStats.newThisMonth} ovaj mesec</p>
                 </div>
                 <div className="w-9 h-9 bg-blue-100 rounded-md flex items-center justify-center shrink-0">
                   <Users className="w-4 h-4 text-blue-700" />
@@ -278,7 +278,7 @@ export function DashboardClient({
             </Link>
             <Link href="/customers" className="flex justify-between text-sm hover:underline">
               <span className="text-muted-foreground">Ukupno klijenata</span>
-              <span className="font-medium">{customers.length}</span>
+              <span className="font-medium">{customerStats.total}</span>
             </Link>
           </CardContent>
         </Card>

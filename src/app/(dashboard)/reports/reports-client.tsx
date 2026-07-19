@@ -35,13 +35,20 @@ const tierColors: Record<string, string> = {
   Bronze: "bg-orange-100 text-orange-800",
 };
 
+interface CustomerStats {
+  total: number;
+  newThisMonth: number;
+  top: { id: string; firstName: string; lastName: string; totalSpent: string }[];
+  loyalty: Record<string, number>;
+}
+
 export function ReportsClient({
   orders,
-  customers,
+  customerStats,
   corrections,
 }: {
   orders: Order[];
-  customers: Customer[];
+  customerStats: CustomerStats;
   corrections: Correction[];
 }) {
   // Prihod po mesecima iz preuzetih (završenih) naloga
@@ -78,10 +85,8 @@ export function ReportsClient({
     .map(([name, value]) => ({ name, value }))
     .filter((o) => o.value > 0);
 
-  // Top klijenti
-  const topCustomers = [...customers]
-    .sort((a, b) => Number(b.totalSpent) - Number(a.totalSpent))
-    .slice(0, 5);
+  // Top klijenti (server-side agregat — puna lista ne putuje u browser)
+  const topCustomers = customerStats.top;
   const maxSpent = Number(topCustomers[0]?.totalSpent ?? 1);
 
   // Korekcije po tipu
@@ -96,7 +101,7 @@ export function ReportsClient({
   // Lojalnost
   const loyaltyBreakdown = ["Platinum", "Gold", "Silver", "Bronze"].map((tier) => ({
     tier,
-    count: customers.filter((c) => c.loyaltyTier === tier).length,
+    count: customerStats.loyalty[tier] ?? 0,
     color: tierColors[tier],
   }));
 
@@ -112,7 +117,7 @@ export function ReportsClient({
         {[
           { label: "Ukupan prihod", value: `RSD ${totalRevenue.toLocaleString()}`, icon: TrendingUp, color: "bg-black text-white" },
           { label: "Prosek / mesec", value: `RSD ${avgMonthly.toLocaleString()}`, icon: TrendingUp, color: "bg-blue-100 text-blue-700" },
-          { label: "Ukupno klijenata", value: String(customers.length), icon: Users, color: "bg-green-100 text-green-700" },
+          { label: "Ukupno klijenata", value: String(customerStats.total), icon: Users, color: "bg-green-100 text-green-700" },
           { label: "Ukupno naloga", value: String(orders.length), icon: ClipboardList, color: "bg-yellow-100 text-yellow-700" },
         ].map((s) => {
           const Icon = s.icon;

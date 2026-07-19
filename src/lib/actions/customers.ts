@@ -15,6 +15,88 @@ async function getCompanyId() {
   return companyId;
 }
 
+// ─── Brze akcije za velike liste (4.000+ klijenata) ──────────────────────────
+// Puna lista NE ide u browser — server vraća stranicu / top-N / agregate.
+
+export async function getCustomersPage(search: string, page: number, pageSize = 25) {
+  const companyId = await getCompanyId();
+  const conditions = [eq(customers.companyId, companyId), isNull(customers.deletedAt)];
+  const q = (search || "").trim();
+  if (q) {
+    conditions.push(
+      or(
+        ilike(customers.firstName, `%${q}%`),
+        ilike(customers.lastName, `%${q}%`),
+        ilike(customers.phone, `%${q}%`),
+        ilike(customers.email, `%${q}%`)
+      )!
+    );
+  }
+  const safePage = Math.max(1, Math.floor(page) || 1);
+  const [rows, cnt] = await Promise.all([
+    db.select().from(customers).where(and(...conditions))
+      .orderBy(customers.lastName, customers.firstName)
+      .limit(pageSize).offset((safePage - 1) * pageSize),
+    db.select({ count: sql<number>`count(*)` }).from(customers).where(and(...conditions)),
+  ]);
+  return { customers: rows, total: Number(cnt[0].count) };
+}
+
+// Laka pretraga za birače klijenata (wizard i sl.) — vraća max 20
+export async function searchCustomersLite(query: string, id?: string) {
+  const companyId = await getCompanyId();
+  if (id) {
+    return db.select().from(customers)
+      .where(and(eq(customers.id, id), eq(customers.companyId, companyId), isNull(customers.deletedAt)))
+      .limit(1);
+  }
+  const q = (query || "").trim();
+  if (q.length < 2) return [];
+  return db.select().from(customers)
+    .where(and(
+      eq(customers.companyId, companyId),
+      isNull(customers.deletedAt),
+      or(
+        ilike(customers.firstName, `%${q}%`),
+        ilike(customers.lastName, `%${q}%`),
+        ilike(customers.phone, `%${q}%`)
+      )!
+    ))
+    .orderBy(customers.lastName, customers.firstName)
+    .limit(20);
+}
+
+// Agregati za dashboard/izvještaje — umjesto slanja svih klijenata u browser
+export async function getCustomerStats() {
+  const companyId = await getCompanyId();
+  const monthStart = new Date();
+  monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+
+  const [totalR, newR, top, loyaltyR] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(customers)
+      .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt))),
+    db.select({ count: sql<number>`count(*)` }).from(customers)
+      .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt),
+        sql`created_at >= ${monthStart.toISOString()}`)),
+    db.select({
+      id: customers.id, firstName: customers.firstName, lastName: customers.lastName,
+      totalSpent: customers.totalSpent,
+    }).from(customers)
+      .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt)))
+      .orderBy(desc(customers.totalSpent)).limit(5),
+    db.select({ tier: customers.loyaltyTier, count: sql<number>`count(*)` }).from(customers)
+      .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt)))
+      .groupBy(customers.loyaltyTier),
+  ]);
+
+  return {
+    total: Number(totalR[0].count),
+    newThisMonth: Number(newR[0].count),
+    top,
+    loyalty: Object.fromEntries(loyaltyR.map((r) => [r.tier, Number(r.count)])),
+  };
+}
+
 export async function getCustomers(search?: string) {
   const companyId = await getCompanyId();
 
