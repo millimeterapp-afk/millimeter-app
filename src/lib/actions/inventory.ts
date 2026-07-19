@@ -154,25 +154,27 @@ export async function receiveMaterial(
   note?: string
 ) {
   const { user, dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
+  if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Količina prijema mora biti broj > 0.");
 
-  await db
-    .update(materials)
-    .set({
-      currentStock: sql`current_stock + ${quantity}`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(eq(materials.id, materialId), eq(materials.companyId, dbUser.companyId!))
-    );
+  // Stanje + log u JEDNOJ transakciji (nema stanja bez loga, ni obrnuto)
+  await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(materials)
+      .set({ currentStock: sql`current_stock + ${quantity}`, updatedAt: new Date() })
+      .where(and(eq(materials.id, materialId), eq(materials.companyId, companyId)))
+      .returning({ id: materials.id });
+    if (updated.length === 0) throw new Error("Materijal nije pronađen.");
 
-  await db.insert(inventoryMovements).values({
-    companyId: dbUser.companyId!,
-    itemType: "material",
-    itemId: materialId,
-    movementType: "receive",
-    quantity: String(quantity),
-    notes: note || null,
-    createdBy: user.id,
+    await tx.insert(inventoryMovements).values({
+      companyId,
+      itemType: "material",
+      itemId: materialId,
+      movementType: "receive",
+      quantity: String(quantity),
+      notes: note || null,
+      createdBy: user.id,
+    });
   });
 
   revalidatePath("/inventory");
@@ -184,20 +186,26 @@ export async function receiveInventoryItem(
   note?: string
 ) {
   const { user, dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
+  if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Količina prijema mora biti broj > 0.");
 
-  await db
-    .update(inventoryItems)
-    .set({ quantity: sql`quantity + ${quantity}` })
-    .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.companyId, dbUser.companyId!)));
+  await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(inventoryItems)
+      .set({ quantity: sql`quantity + ${quantity}` })
+      .where(and(eq(inventoryItems.id, itemId), eq(inventoryItems.companyId, companyId)))
+      .returning({ id: inventoryItems.id });
+    if (updated.length === 0) throw new Error("Artikal nije pronađen.");
 
-  await db.insert(inventoryMovements).values({
-    companyId: dbUser.companyId!,
-    itemType: "inventory_item",
-    itemId,
-    movementType: "receive",
-    quantity: String(quantity),
-    notes: note || null,
-    createdBy: user.id,
+    await tx.insert(inventoryMovements).values({
+      companyId,
+      itemType: "inventory_item",
+      itemId,
+      movementType: "receive",
+      quantity: String(quantity),
+      notes: note || null,
+      createdBy: user.id,
+    });
   });
 
   revalidatePath("/inventory");

@@ -5,6 +5,7 @@ import { customers, customerMeasurements, orders } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { belgradeToday } from "@/lib/datetime";
 import * as XLSX from "xlsx";
 import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders } from "@/lib/gocreate";
 import { applyLoyaltyTier } from "@/lib/loyalty";
@@ -175,8 +176,8 @@ export async function createCustomer(data: {
       dateOfBirth: data.dateOfBirth || null,
       notes: data.notes || null,
       templateNumber: data.templateNumber || null,
-      firstVisitDate: new Date().toISOString().split("T")[0],
-      lastVisitDate: new Date().toISOString().split("T")[0],
+      firstVisitDate: belgradeToday(),
+      lastVisitDate: belgradeToday(),
       createdBy: user.id,
     })
     .returning();
@@ -419,8 +420,8 @@ export async function importCustomers(formData: FormData) {
       city: r["Grad"] ? String(r["Grad"]) : null,
       templateNumber: r["Broj šablona"] ? String(r["Broj šablona"]) : null,
       notes: r["Napomena"] ? String(r["Napomena"]) : null,
-      firstVisitDate: new Date().toISOString().split("T")[0],
-      lastVisitDate: new Date().toISOString().split("T")[0],
+      firstVisitDate: belgradeToday(),
+      lastVisitDate: belgradeToday(),
       createdBy: user.id,
     }));
 

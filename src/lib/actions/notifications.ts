@@ -5,6 +5,7 @@ import { orders, corrections, customers, materials } from "@/lib/db/schema";
 
 import { eq, and, isNull, sql, notInArray, inArray } from "drizzle-orm";
 import { requireActiveUser } from "@/lib/auth";
+import { belgradeToday } from "@/lib/datetime";
 
 async function getCompanyId() {
   try {
@@ -22,7 +23,7 @@ export async function getNotificationData() {
     const companyId = await getCompanyId();
     if (!companyId) return empty;
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = belgradeToday();
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
     // Sekvencijalno — ne paralelno — da ne zasipamo pool konekcijama

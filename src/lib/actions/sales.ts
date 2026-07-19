@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { sales, saleItems, payments, inventoryItems, customers } from "@/lib/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { belgradeToday } from "@/lib/datetime";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
 
@@ -129,7 +130,7 @@ export async function createSale(data: {
       customerId: data.customerId || null,
       amount: String(totalAmount),
       paymentMethod: data.paymentMethod,
-      paymentDate: new Date().toISOString().split("T")[0],
+      paymentDate: belgradeToday(),
       createdBy: user.id,
     });
 
@@ -140,7 +141,7 @@ export async function createSale(data: {
         .set({
           totalSpent: sql`total_spent + ${totalAmount}`,
           visitCount: sql`visit_count + 1`,
-          lastVisitDate: new Date().toISOString().split("T")[0],
+          lastVisitDate: belgradeToday(),
           updatedAt: new Date(),
         })
         .where(and(eq(customers.id, data.customerId), eq(customers.companyId, companyId)))

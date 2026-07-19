@@ -114,6 +114,9 @@ export function NewOrderClient({
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "transfer">("cash");
   const [purchaseNotes, setPurchaseNotes] = useState("");
   const [error, setError] = useState("");
+  // Isti ključ za sve pokušaje ove forme — retry ne pravi duplu porudžbinu
+  const [idempotencyKey] = useState(() =>
+    typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
   const fabrics = materials.filter((m) => m.category === "Tkanina" || m.category === "Postava");
 
@@ -149,6 +152,7 @@ export function NewOrderClient({
           avansAmount: Number(avans) || 0,
           paymentMethod,
           notes: purchaseNotes || undefined,
+          idempotencyKey,
           nalozi: nalozi.map((n) => ({
             orderKind: n.orderKind,
             dueDate: n.dueDate || undefined,

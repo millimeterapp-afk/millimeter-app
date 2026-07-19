@@ -170,6 +170,7 @@ export const purchases = pgTable("purchases", {
   paymentStatus: text("payment_status").default("unpaid").notNull(), // unpaid | avans | paid
   status: text("status").default("open").notNull(), // open | completed | cancelled
   notes: text("notes"),
+  idempotencyKey: text("idempotency_key"), // sprječava duplu porudžbinu na retry (unique po firmi kad nije null)
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

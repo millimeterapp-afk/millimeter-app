@@ -144,6 +144,38 @@ export async function createSupplierInvoice(data: {
   additionalCosts: AdditionalCostInput[];
 }) {
   const { user, dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
+
+  // — Validacija —
+  if (!data.invoiceNumber || !data.invoiceNumber.trim()) throw new Error("Broj fakture je obavezan.");
+  for (const it of data.items) {
+    if (!Number.isFinite(it.quantity) || it.quantity <= 0) throw new Error("Količina stavke mora biti > 0.");
+    if (!Number.isFinite(it.unitPrice) || it.unitPrice < 0) throw new Error("Cena stavke mora biti ≥ 0.");
+  }
+  for (const c of data.additionalCosts) {
+    if (c.amount != null && (!Number.isFinite(c.amount) || c.amount < 0)) throw new Error("Dodatni trošak mora biti ≥ 0.");
+  }
+  // Dobavljač i svi materijali/artikli moraju pripadati firmi (cross-tenant zaštita)
+  if (data.supplierId) {
+    const sup = await db.query.suppliers.findFirst({
+      where: (s, { eq, and }) => and(eq(s.id, data.supplierId!), eq(s.companyId, companyId)),
+    });
+    if (!sup) throw new Error("Dobavljač nije pronađen.");
+  }
+  for (const it of data.items) {
+    if (it.materialId) {
+      const m = await db.query.materials.findFirst({
+        where: (m, { eq, and }) => and(eq(m.id, it.materialId!), eq(m.companyId, companyId)),
+      });
+      if (!m) throw new Error("Materijal iz stavke nije pronađen.");
+    }
+    if (it.inventoryItemId) {
+      const inv = await db.query.inventoryItems.findFirst({
+        where: (i, { eq, and }) => and(eq(i.id, it.inventoryItemId!), eq(i.companyId, companyId)),
+      });
+      if (!inv) throw new Error("Artikal iz stavke nije pronađen.");
+    }
+  }
 
   // Izračunaj subtotal
   const subtotal = data.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
@@ -217,7 +249,7 @@ export async function createSupplierInvoice(data: {
 
         await db.update(materials)
           .set({ lastPurchasePrice: String(finalUnitCost) })
-          .where(eq(materials.id, item.materialId));
+          .where(and(eq(materials.id, item.materialId), eq(materials.companyId, companyId)));
       }
       if (item.inventoryItemId) {
         const proportion = subtotal > 0 ? item.total / subtotal : 0;
@@ -228,7 +260,7 @@ export async function createSupplierInvoice(data: {
 
         await db.update(inventoryItems)
           .set({ costPrice: String(finalUnitCost) })
-          .where(eq(inventoryItems.id, item.inventoryItemId));
+          .where(and(eq(inventoryItems.id, item.inventoryItemId), eq(inventoryItems.companyId, companyId)));
       }
     }
   }

@@ -7,6 +7,7 @@ import { applyLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { belgradeToday } from "@/lib/datetime";
 
 async function getCurrentUser() {
   const { user, dbUser } = await requireActiveUser();
@@ -200,7 +201,7 @@ export async function updateOrderStatus(
         .set({
           totalSpent: sql`total_spent + ${Number(order.totalAmount)}`,
           visitCount: sql`visit_count + 1`,
-          lastVisitDate: new Date().toISOString().split("T")[0],
+          lastVisitDate: belgradeToday(),
           updatedAt: new Date(),
         })
         .where(and(eq(customers.id, order.customerId), eq(customers.companyId, companyId)));

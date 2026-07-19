@@ -7,6 +7,7 @@ import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { belgradeToday } from "@/lib/datetime";
 
 // ─── Auth helper ────────────────────────────────────────────────────────────
 async function getCurrentUser() {
@@ -53,6 +54,7 @@ interface NewPurchase {
   paymentMethod?: "cash" | "card" | "transfer";
   notes?: string;
   nalozi: NewNalog[];
+  idempotencyKey?: string; // isti ključ po formi — retry vraća postojeću porudžbinu
 }
 
 // ─── createPurchase ───────────────────────────────────────────────────────────
@@ -86,6 +88,15 @@ export async function createPurchase(data: NewPurchase) {
       and(eq(c.id, data.customerId), eq(c.companyId, companyId), isNull(c.deletedAt)),
   });
   if (!customer) throw new Error("Klijent nije pronađen.");
+
+  // Idempotency — ako je isti zahtjev već prošao (retry posle timeout-a), vrati
+  // postojeću porudžbinu umjesto da napravi duplu.
+  if (data.idempotencyKey) {
+    const existing = await db.query.purchases.findFirst({
+      where: (p, { eq, and }) => and(eq(p.idempotencyKey, data.idempotencyKey!), eq(p.companyId, companyId)),
+    });
+    if (existing) return existing;
+  }
 
   // — Izračun ukupne sume —
   const purchaseTotal = data.nalozi.reduce(
@@ -124,6 +135,7 @@ export async function createPurchase(data: NewPurchase) {
       paymentStatus,
       status: "open",
       notes: data.notes || null,
+      idempotencyKey: data.idempotencyKey || null,
     }).returning();
 
     for (let i = 0; i < data.nalozi.length; i++) {
@@ -173,7 +185,7 @@ export async function createPurchase(data: NewPurchase) {
         customerId: data.customerId,
         amount: String(avans),
         paymentMethod: data.paymentMethod ?? "cash",
-        paymentDate: new Date().toISOString().split("T")[0],
+        paymentDate: belgradeToday(),
         notes: "Avans pri naručivanju",
         createdBy: user.id,
       });
@@ -362,7 +374,7 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
           porudzbinaZavrsena = preostali.length === 0;
         }
         if (porudzbinaZavrsena) {
-          const danas = new Date().toISOString().split("T")[0];
+          const danas = belgradeToday();
           await tx.update(customers)
             .set({
               visitCount: sql`visit_count + 1`,
@@ -506,7 +518,7 @@ export async function addPurchasePayment(
       customerId: purchase.customer_id,
       amount: String(amount),
       paymentMethod: method,
-      paymentDate: new Date().toISOString().split("T")[0],
+      paymentDate: belgradeToday(),
       createdBy: user.id,
     });
 

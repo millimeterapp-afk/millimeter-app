@@ -33,11 +33,29 @@ export async function createCorrection(data: {
   templateNote?: string;
 }) {
   const { user, dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
+
+  // — Validacija —
+  if (!data.description || !data.description.trim()) throw new Error("Opis korekcije je obavezan.");
+  // Nalog / klijent (ako su navedeni) moraju pripadati firmi
+  if (data.orderId) {
+    const o = await db.query.orders.findFirst({
+      where: (o, { eq, and }) => and(eq(o.id, data.orderId!), eq(o.companyId, companyId)),
+    });
+    if (!o) throw new Error("Nalog nije pronađen.");
+  }
+  if (data.customerId) {
+    const c = await db.query.customers.findFirst({
+      where: (c, { eq, and, isNull }) =>
+        and(eq(c.id, data.customerId!), eq(c.companyId, companyId), isNull(c.deletedAt)),
+    });
+    if (!c) throw new Error("Klijent nije pronađen.");
+  }
 
   const [correction] = await db
     .insert(corrections)
     .values({
-      companyId: dbUser.companyId!,
+      companyId,
       orderId: data.orderId || null,
       customerId: data.customerId || null,
       correctionType: data.correctionType,
