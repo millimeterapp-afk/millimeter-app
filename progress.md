@@ -60,6 +60,10 @@
 ## Urađeno (18.7 — sve godine klijenata)
 - [2026-07-18] ✅ Multi-year analiza `Spisak klijenata za Mateja po godinama.xlsx` (2017–2026, 2018 prazan): 8323 reda sa brojem + 1209 bez + 1099 artikal-šum → **4384 jedinstvena klijenta** (dedup preko godina po broju+imenu). 273 „bez broja" razriješeno uparivanjem imena iz drugih godina; **500 ostaje bez broja** (za Aleksandra); 437 slučajeva isti broj/više imena (porodice ili nadimci — uvoze se kao posebni). Dry-run vs baza: 676 već unutra, **3708 NOVIH → ~4389 ukupno**. CSV-i: `klijenti-SVE-*.csv` (Desktop). Skripta: scratchpad `ocisti-sve-godine.py`. **ČEKA MATEJEVO „uvozi".**
 
+## Urađeno (19.7 — odgovori stigli + performanse)
+- [2026-07-19] 📧 **STIGLI ODGOVORI**: Nikola (novi zahtjevi: GoCreate kupci+porudžbine spajanje, artikli „iz Admina", top-po-godini filter, UBRZATI app) i Aleksandar (faze+nazivi POTVRĐENI, gotov proizvod detaljno — prost nalog + opciona korekcija, partneri: Doucals/Gran Sasso/Falke/Barmas/Gherardi/aksesoari/neprodati komadi; Munro tok stiže kao Word; loginovi DA — radnja svako svoj, proizvodnja JEDAN prost nalog; komentari po modulima stižu u fajlu)
+- [2026-07-19] ⚡ **Performanse popravljene** (Nikolina primjedba): 10 DB indeksa; /customers server paginacija+pretraga; dashboard/reports agregati; wizard server pretraga. Puna lista od 4.346 klijenata više NE putuje u browser. Follow-up: appointments/corrections/sales pickeri.
+
 ## Ostalo iz Codex reviewa
 - Blok 2: idempotency ključ na createPurchase (dupla porudžbina na retry)
 - Blok 3: DB constraints/indeksi (apply_migration!), minimalna role matrica, validacioni sweep (appointments/corrections/suppliers/inventory), Beograd-datum helper, 6 ESLint grešaka
