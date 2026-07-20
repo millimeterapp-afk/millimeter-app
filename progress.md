@@ -86,6 +86,18 @@
 - Skripta: scratchpad `uvoz-munro.mjs` (re-importabilno). Za potpunost: druge 2 radnje (invoice 2855, Montenegro 3100) — isti CustomMade export kad zatreba.
 - Preostalo od Nikolinog: **artikli „iz Admina"** = kasa Octopos (drugi sistem, čeka njihov izvoz); „top po godini" filter ✅ radi.
 
+## Urađeno (20.7 — pouzdanost)
+- [2026-07-20] ✅ **Signal za materijal** (Aleksandrov zahtjev): zvono pokazuje „Materijal stigao — nalog može u izradu" za naloge u fazi `ceka_materijal` čiji je materijal sad na stanju.
+- [2026-07-20] ✅ **„Munro nedostupan" poruka** (pre-mortem): `getGoCreateOrdersSafe` razlikuje „nema naloga" od „API pao"; detalj Munro naloga pokazuje narandžastu poruku umjesto tihe praznine.
+
+## GO-LIVE GATE (20–25.7) — ostalo, dio čeka klijenta
+- [ ] **Repo → Private** (Matej, GitHub, 2 min) — kod je javan, PII/logika unutra
+- [ ] **Supabase Pro** (~$25/mj, bekapi) — Matej pali pred prvi radni dan
+- [ ] **Nikolina lozinka** promijeniti (Nikola)
+- [ ] `app.millimeter.rs` subdomen (0 troška, domen već plaćaju)
+- [ ] `/security-audit` finalni prolaz + ponovni Codex Blok 1+2+3
+- [ ] Role matrica (čeka Nikolinu potvrdu tačnih prava)
+
 ## Traženo od klijenta (mejl 19.7)
 - Aleksandrov Word za Munro tok radnje; komentari po modulima; 500 bez broja (radi od ponedeljka)
 - Nikola: šta je „Admin" za artikle (kasa Octopos izvoz?); potvrda role matrice
