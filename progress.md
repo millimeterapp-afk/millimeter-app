@@ -77,6 +77,15 @@
 - **postInvoice concurrency** (nalaz 11) — supplier modul, rijedak; createSupplierInvoice već popravljen, ostaje transakciono omotati postInvoice.
 - **Ponovni Codex prolaz** da potvrdi Blok 1+2+3.
 
+## Urađeno (20.7 — Munro spajanje, Nikolin glavni zahtjev)
+- [2026-07-20] ✅ **Munro istorija spojena**: Nikola izvezao iz GoCreate 3 fajla (Customers 2009, CustomMade 7561 porudžbina 2020-2026, ReadyMade 336). CustomMade je glavni (ima kupca+artikal+datum+cenu). Format kupca „Prezime, Ime".
+- Nova tabela `munro_orders` (RLS 5/5). Uvezeno **7558 porudžbina**, uparivanje po imenu → **1485 imena (77%)** poklopljeno; **423 nova klijenta** dodata (bez telefona, tag „Munro kupac"). Baza sad **4768 klijenata, 1908 sa Munro istorijom**.
+- **Profil klijenta**: sekcija „Munro istorija" (artikal, datum, cena, status, sažetak po godini).
+- **Reports**: „Top klijenti po Munro porudžbinama" sa biračem godine (`getTopMunroByYear`). Promet po godini: 2024 €292k, 2025 €383k...
+- ⚠️ Cene su Munro VELEPRODAJNE (P_Price) — pokazatelj obima, NE prihod od klijenta (napomena svuda u UI). R_Price prazan u exportu.
+- Skripta: scratchpad `uvoz-munro.mjs` (re-importabilno). Za potpunost: druge 2 radnje (invoice 2855, Montenegro 3100) — isti CustomMade export kad zatreba.
+- Preostalo od Nikolinog: **artikli „iz Admina"** = kasa Octopos (drugi sistem, čeka njihov izvoz); „top po godini" filter ✅ radi.
+
 ## Traženo od klijenta (mejl 19.7)
 - Aleksandrov Word za Munro tok radnje; komentari po modulima; 500 bez broja (radi od ponedeljka)
 - Nikola: šta je „Admin" za artikle (kasa Octopos izvoz?); potvrda role matrice
