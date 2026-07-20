@@ -7,7 +7,7 @@ import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import * as XLSX from "xlsx";
-import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders } from "@/lib/gocreate";
+import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders, getGoCreateOrdersSafe } from "@/lib/gocreate";
 import { applyLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
 
@@ -528,7 +528,7 @@ export async function fetchGoCreateOrdersForCustomer(customerId: string) {
   const customer = await db.query.customers.findFirst({
     where: (c, { eq, and }) => and(eq(c.id, customerId), eq(c.companyId, companyId)),
   });
-  if (!customer?.goCreateCustomerId) return [];
+  if (!customer?.goCreateCustomerId) return { orders: [], unavailable: false };
 
-  return getGoCreateOrders(Number(customer.goCreateCustomerId));
+  return getGoCreateOrdersSafe(Number(customer.goCreateCustomerId));
 }

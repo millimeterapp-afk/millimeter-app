@@ -136,3 +136,19 @@ export async function getGoCreateOrders(goCreateCustomerId: number): Promise<GoC
     return [];
   }
 }
+
+/** Kao getGoCreateOrders, ali razlikuje "nema naloga" od "Munro nedostupan"
+ *  (token istekao / API pao) — da radnik ne pomisli da klijent nema Munro. */
+export async function getGoCreateOrdersSafe(
+  goCreateCustomerId: number
+): Promise<{ orders: GoCreateOrder[]; unavailable: boolean }> {
+  try {
+    const result = await post<GoCreateOrdersResponse>("/Order/ByCustomerId", {
+      CustomerID: goCreateCustomerId,
+    });
+    return { orders: result.Orders ?? [], unavailable: false };
+  } catch (err) {
+    console.error("[GoCreate] getOrders failed:", err);
+    return { orders: [], unavailable: true };
+  }
+}

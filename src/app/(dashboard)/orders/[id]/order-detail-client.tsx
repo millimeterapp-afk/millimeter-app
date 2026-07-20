@@ -97,7 +97,7 @@ const GC_STATUS_COLORS: Record<string, string> = {
   "Delivered": "bg-gray-100 text-gray-600",
 };
 
-export function OrderDetailClient({ order, gcOrders = [] }: { order: OrderWithDetails; gcOrders?: GoCreateOrder[] }) {
+export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false }: { order: OrderWithDetails; gcOrders?: GoCreateOrder[]; gcUnavailable?: boolean }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showPayment, setShowPayment] = useState(false);
@@ -1060,6 +1060,11 @@ ${order.notes ? `
                     </button>
                   )}
                 </div>
+              </div>
+            ) : gcUnavailable ? (
+              <div className="flex items-center gap-2 text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                Munro trenutno nedostupan — ne mogu da povučem statuse. Probaj kasnije ili provjeri pristup na gocreate.nu.
               </div>
             ) : gcOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground">

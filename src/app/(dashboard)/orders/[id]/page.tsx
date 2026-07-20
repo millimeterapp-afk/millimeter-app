@@ -8,9 +8,9 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const order = await getOrder(id);
   if (!order) return notFound();
 
-  const gcOrders = order.productionFlow === "munro" && order.customerId
+  const gc = order.productionFlow === "munro" && order.customerId
     ? await fetchGoCreateOrdersForCustomer(order.customerId)
-    : [];
+    : { orders: [], unavailable: false };
 
-  return <OrderDetailClient order={order} gcOrders={gcOrders} />;
+  return <OrderDetailClient order={order} gcOrders={gc.orders} gcUnavailable={gc.unavailable} />;
 }
