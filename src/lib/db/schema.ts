@@ -228,6 +228,27 @@ export const orderItems = pgTable("order_items", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ─── Munro Orders (istorija Munro porudžbina — uvezeno iz GoCreate exporta) ─────
+// Vezuje se za klijenta po imenu. Cijene su Munro VELEPRODAJNE (P_Price), ne
+// maloprodajne — služe za "top po godini" i loyalty pregled, NE za totalSpent.
+
+export const munroOrders = pgTable("munro_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  companyId: uuid("company_id").references(() => companies.id).notNull(),
+  customerId: uuid("customer_id").references(() => customers.id, { onDelete: "set null" }),
+  orderNumber: text("order_number").notNull(), // MILL.110.RS.XXXXXXX
+  customerName: text("customer_name").notNull(), // "Prezime, Ime" iz GoCreate
+  item: text("item"),
+  fabric: text("fabric"),
+  status: text("status"),
+  price: numeric("price", { precision: 10, scale: 2 }).default("0").notNull(),
+  orderYear: integer("order_year"),
+  createdDate: date("created_date"),
+  deliveryDate: date("delivery_date"),
+  source: text("source").default("custommade"), // custommade | readymade
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ─── Material Reservations ────────────────────────────────────────────────────
 
 export const materialReservations = pgTable("material_reservations", {
@@ -447,6 +468,11 @@ export const customersRelations = relations(customers, ({ many }) => ({
   measurements: many(customerMeasurements),
   orders: many(orders),
   corrections: many(corrections),
+  munroOrders: many(munroOrders),
+}));
+
+export const munroOrdersRelations = relations(munroOrders, ({ one }) => ({
+  customer: one(customers, { fields: [munroOrders.customerId], references: [customers.id] }),
 }));
 
 export const customerMeasurementsRelations = relations(customerMeasurements, ({ one }) => ({
@@ -528,6 +554,7 @@ export type InventoryItem = typeof inventoryItems.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type Purchase = typeof purchases.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type MunroOrder = typeof munroOrders.$inferSelect;
 export type ProductionTask = typeof productionTasks.$inferSelect;
 export type Correction = typeof corrections.$inferSelect;
 export type Sale = typeof sales.$inferSelect;

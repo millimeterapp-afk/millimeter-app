@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Phone, Mail, MapPin, Ruler, Star, ClipboardList, Wrench, Check, Pencil, Plus, History, CalendarDays, Clock, Package } from "lucide-react";
 import Link from "next/link";
-import type { Customer, CustomerMeasurement, Order, OrderItem, Correction, Appointment } from "@/lib/db/schema";
+import type { Customer, CustomerMeasurement, Order, OrderItem, Correction, Appointment, MunroOrder } from "@/lib/db/schema";
 import type { GoCreateOrder } from "@/lib/gocreate";
 
 type CustomerWithDetails = Customer & {
   measurements: CustomerMeasurement[];
   orders: (Order & { items: OrderItem[] })[];
   corrections: Correction[];
+  munroOrders: MunroOrder[];
 };
 
 const nalogStatusLabels: Record<string, string> = {
@@ -577,6 +578,55 @@ export function CustomerProfileClient({ customer, appointments, munroOrders }: {
               </CardContent>
             </Card>
           )}
+
+          {/* Munro istorija (uvezeno iz GoCreate) */}
+          {customer.munroOrders.length > 0 && (() => {
+            const total = customer.munroOrders.reduce((s, m) => s + Number(m.price), 0);
+            const byYear: Record<string, number> = {};
+            for (const m of customer.munroOrders) if (m.orderYear) byYear[m.orderYear] = (byYear[m.orderYear] ?? 0) + 1;
+            return (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    <Package className="w-4 h-4" /> Munro istorija ({customer.munroOrders.length})
+                    <span className="ml-auto text-xs font-normal normal-case text-muted-foreground">
+                      ukupno ≈ €{Math.round(total).toLocaleString()} · {Object.entries(byYear).sort().map(([y, n]) => `${y}: ${n}`).join(" · ")}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[560px]">
+                      <thead>
+                        <tr className="border-b bg-muted/30">
+                          <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Datum</th>
+                          <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Artikal</th>
+                          <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Materijal</th>
+                          <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Status</th>
+                          <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">Cena (€)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {customer.munroOrders.slice(0, 40).map((m) => (
+                          <tr key={m.id} className="border-b last:border-0 hover:bg-muted/20">
+                            <td className="px-4 py-2.5 text-sm">{m.createdDate ?? "—"}</td>
+                            <td className="px-4 py-2.5 text-sm font-medium">{m.item ?? "—"}</td>
+                            <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-[160px] truncate" title={m.fabric ?? ""}>{m.fabric ?? "—"}</td>
+                            <td className="px-4 py-2.5 text-xs text-muted-foreground">{m.status ?? "—"}</td>
+                            <td className="px-4 py-2.5 text-sm text-right">{Number(m.price).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {customer.munroOrders.length > 40 && (
+                      <p className="text-xs text-muted-foreground text-center py-2">Prikazano prvih 40 od {customer.munroOrders.length}</p>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground px-4 py-2 border-t">Cene su Munro veleprodajne (P_Price), ne maloprodajne.</p>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Termini */}
           <Card>

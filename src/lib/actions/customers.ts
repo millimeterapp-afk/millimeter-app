@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { customers, customerMeasurements, orders } from "@/lib/db/schema";
+import { customers, customerMeasurements, orders, munroOrders } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -141,8 +141,41 @@ export async function getCustomer(id: string) {
       corrections: {
         orderBy: (c, { desc }) => [desc(c.createdAt)],
       },
+      munroOrders: {
+        orderBy: (m, { desc }) => [desc(m.createdDate)],
+      },
     },
   });
+}
+
+// ─── Top klijenti po Munro potrošnji za godinu (Nikolin zahtjev) ──────────────
+export async function getTopMunroByYear(year: number) {
+  const companyId = await getCompanyId();
+  const rows = await db
+    .select({
+      customerId: munroOrders.customerId,
+      customerName: munroOrders.customerName,
+      orders: sql<number>`count(*)`,
+      totalEur: sql<number>`sum(price)`,
+    })
+    .from(munroOrders)
+    .where(and(eq(munroOrders.companyId, companyId), eq(munroOrders.orderYear, year)))
+    .groupBy(munroOrders.customerId, munroOrders.customerName)
+    .orderBy(sql`sum(price) desc`)
+    .limit(20);
+  return rows.map((r) => ({ ...r, orders: Number(r.orders), totalEur: Number(r.totalEur) }));
+}
+
+// Godine za koje imamo Munro istoriju (za dropdown)
+export async function getMunroYears() {
+  const companyId = await getCompanyId();
+  const rows = await db
+    .select({ year: munroOrders.orderYear })
+    .from(munroOrders)
+    .where(and(eq(munroOrders.companyId, companyId), sql`order_year is not null`))
+    .groupBy(munroOrders.orderYear)
+    .orderBy(desc(munroOrders.orderYear));
+  return rows.map((r) => r.year).filter((y): y is number => y != null);
 }
 
 export async function createCustomer(data: {
