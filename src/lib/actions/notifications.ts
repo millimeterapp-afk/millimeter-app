@@ -16,7 +16,7 @@ async function getCompanyId() {
   }
 }
 
-const empty = { overdueOrders: [], openCorrections: [], inactiveCustomers: [], lowStockMaterials: [] };
+const empty = { overdueOrders: [], openCorrections: [], inactiveCustomers: [], lowStockMaterials: [], materialReady: [] as { id: string; orderNumber: string; material: string }[] };
 
 export async function getNotificationData() {
   try {
@@ -66,7 +66,20 @@ export async function getNotificationData() {
       return (Number(m.currentStock) - Number(m.reservedStock)) < Number(m.reorderLevel);
     });
 
-    return { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials };
+    // Aleksandrov signal: nalozi u fazi "ceka_materijal" čiji je materijal sad na
+    // stanju (stigla pošiljka pa unesen prijem). Znak da mogu u izradu.
+    const materialReady = (await db.execute(sql`
+      SELECT DISTINCT o.id, o.order_number AS "orderNumber", oi.material
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN materials m ON m.name = oi.material AND m.company_id = o.company_id
+      WHERE o.company_id = ${companyId}
+        AND o.nalog_status = 'ceka_materijal'
+        AND (m.current_stock - m.reserved_stock) > 0
+      LIMIT 15
+    `)) as unknown as { id: string; orderNumber: string; material: string }[];
+
+    return { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials, materialReady };
   } catch {
     return empty;
   }

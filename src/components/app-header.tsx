@@ -2,16 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, X, AlertTriangle, Clock, Package, Menu } from "lucide-react";
+import { Bell, X, AlertTriangle, Clock, Package, Menu, CheckCircle2 } from "lucide-react";
 import type { NotificationData } from "@/lib/actions/notifications";
 
 export function AppHeader({ notifData, userName, onMenuClick }: { notifData: NotificationData; userName?: string; onMenuClick?: () => void }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials } = notifData;
+  const { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials, materialReady } = notifData;
 
   const notifications = [
+    ...materialReady.map((m) => ({
+      id: `matready-${m.id}`,
+      type: "success" as const,
+      title: "Materijal stigao — nalog može u izradu",
+      body: `${m.orderNumber} · ${m.material}`,
+      sub: "Nalog čeka materijal koji je sada na stanju",
+      href: `/orders/${m.id}`,
+    })),
     ...overdueOrders.map((o) => ({
       id: `ord-${o.id}`,
       type: "warning" as const,
@@ -52,18 +60,21 @@ export function AppHeader({ notifData, userName, onMenuClick }: { notifData: Not
     warning: "text-orange-500",
     info: "text-blue-500",
     neutral: "text-gray-400",
+    success: "text-green-600",
   };
 
   const iconBg = {
     warning: "bg-orange-50",
     info: "bg-blue-50",
     neutral: "bg-gray-50",
+    success: "bg-green-50",
   };
 
   const NotifIcon = {
     warning: AlertTriangle,
     info: Clock,
     neutral: Package,
+    success: CheckCircle2,
   };
 
   return (
