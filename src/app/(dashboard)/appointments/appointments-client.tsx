@@ -7,6 +7,7 @@ import {
 } from "@/lib/actions/appointments";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CustomerPicker } from "@/components/customer-picker";
 import { Plus, X, ChevronLeft, ChevronRight, Clock, User, Check, XCircle, Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
 import type { Appointment, Customer } from "@/lib/db/schema";
@@ -63,10 +64,9 @@ const emptyForm = {
 };
 
 export function AppointmentsClient({
-  appointments, customers,
+  appointments,
 }: {
   appointments: AppointmentWithCustomer[];
-  customers: Customer[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -74,8 +74,10 @@ export function AppointmentsClient({
   const [baseDate, setBaseDate] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; label: string } | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
+  const [editSelectedCustomer, setEditSelectedCustomer] = useState<{ id: string; label: string } | null>(null);
 
   const weekDays = getWeekDays(baseDate);
   const today = new Date();
@@ -88,7 +90,7 @@ export function AppointmentsClient({
     if (!form.scheduledAt) return;
     startTransition(async () => {
       await createAppointment({
-        customerId: form.customerId || undefined,
+        customerId: selectedCustomer?.id || undefined,
         scheduledAt: form.scheduledAt,
         durationMinutes: form.durationMinutes,
         type: form.type,
@@ -96,6 +98,7 @@ export function AppointmentsClient({
       });
       setShowForm(false);
       setForm(emptyForm);
+      setSelectedCustomer(null);
       router.refresh();
     });
   };
@@ -119,13 +122,14 @@ export function AppointmentsClient({
       type: appt.type,
       notes: appt.notes ?? "",
     });
+    setEditSelectedCustomer(appt.customer ? { id: appt.customer.id, label: `${appt.customer.firstName} ${appt.customer.lastName}` } : null);
   };
 
   const handleSaveEdit = () => {
     if (!editId) return;
     startTransition(async () => {
       await updateAppointment(editId, {
-        customerId: editForm.customerId || undefined,
+        customerId: editSelectedCustomer?.id || undefined,
         scheduledAt: editForm.scheduledAt,
         durationMinutes: editForm.durationMinutes,
         type: editForm.type,
@@ -293,7 +297,7 @@ export function AppointmentsClient({
             )}
             <div className="space-y-2">
               {upcoming.map(appt => (
-                <AppointmentCard key={appt.id} appt={appt} customers={customers}
+                <AppointmentCard key={appt.id} appt={appt}
                   onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete}
                   isPending={isPending} />
               ))}
@@ -308,7 +312,7 @@ export function AppointmentsClient({
               </h2>
               <div className="space-y-2">
                 {past.slice(0, 10).map(appt => (
-                  <AppointmentCard key={appt.id} appt={appt} customers={customers}
+                  <AppointmentCard key={appt.id} appt={appt}
                     onStatusChange={handleStatusChange} onEdit={handleEdit} onDelete={handleDelete}
                     isPending={isPending} />
                 ))}
@@ -329,14 +333,9 @@ export function AppointmentsClient({
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Klijent</label>
-                <select value={form.customerId}
-                  onChange={e => setForm({ ...form, customerId: e.target.value })}
-                  className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
-                  <option value="">— bez klijenta —</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-                  ))}
-                </select>
+                <div className="mt-1">
+                  <CustomerPicker value={selectedCustomer} onChange={setSelectedCustomer} placeholder="Bez klijenta — ili pretraži..." />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -400,14 +399,9 @@ export function AppointmentsClient({
             <div className="space-y-4">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Klijent</label>
-                <select value={editForm.customerId}
-                  onChange={e => setEditForm({ ...editForm, customerId: e.target.value })}
-                  className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
-                  <option value="">— bez klijenta —</option>
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-                  ))}
-                </select>
+                <div className="mt-1">
+                  <CustomerPicker value={editSelectedCustomer} onChange={setEditSelectedCustomer} placeholder="Bez klijenta — ili pretraži..." />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -463,10 +457,9 @@ export function AppointmentsClient({
 }
 
 function AppointmentCard({
-  appt, customers, onStatusChange, onEdit, onDelete, isPending,
+  appt, onStatusChange, onEdit, onDelete, isPending,
 }: {
   appt: AppointmentWithCustomer;
-  customers: Customer[];
   onStatusChange: (id: string, s: "completed" | "cancelled" | "no_show") => void;
   onEdit: (a: AppointmentWithCustomer) => void;
   onDelete: (id: string) => void;

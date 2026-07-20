@@ -15,11 +15,14 @@ async function getCurrentUser() {
 export async function getCorrections() {
   const { dbUser } = await getCurrentUser();
 
-  return db
-    .select()
-    .from(corrections)
-    .where(eq(corrections.companyId, dbUser.companyId!))
-    .orderBy(desc(corrections.createdAt));
+  return db.query.corrections.findMany({
+    where: (c, { eq }) => eq(c.companyId, dbUser.companyId!),
+    with: {
+      customer: { columns: { id: true, firstName: true, lastName: true } },
+      order: { columns: { id: true, orderNumber: true, item: true } },
+    },
+    orderBy: (c, { desc }) => [desc(c.createdAt)],
+  });
 }
 
 export async function createCorrection(data: {

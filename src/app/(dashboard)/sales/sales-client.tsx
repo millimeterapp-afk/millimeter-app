@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSale } from "@/lib/actions/sales";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CustomerPicker } from "@/components/customer-picker";
 import { Search, X, ShoppingCart, Check, Plus, Package } from "lucide-react";
 import type { Customer, InventoryItem, Sale, SaleItem } from "@/lib/db/schema";
 
@@ -28,11 +29,9 @@ const paymentMethods = [
 ];
 
 export function SalesClient({
-  customers,
   inventoryItems,
   recentSales,
 }: {
-  customers: Customer[];
   inventoryItems: InventoryItem[];
   recentSales: SaleWithDetails[];
 }) {
@@ -40,7 +39,7 @@ export function SalesClient({
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [customerId, setCustomerId] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; label: string } | null>(null);
   const [payment, setPayment] = useState<"cash" | "card" | "transfer">("cash");
   const [success, setSuccess] = useState(false);
 
@@ -100,7 +99,7 @@ export function SalesClient({
     startTransition(async () => {
       try {
         await createSale({
-          customerId: customerId || undefined,
+          customerId: selectedCustomer?.id || undefined,
           paymentMethod: payment,
           items: cart.map((c) => ({
             itemName: c.name,
@@ -111,7 +110,7 @@ export function SalesClient({
           })),
         });
         setCart([]);
-        setCustomerId("");
+        setSelectedCustomer(null);
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
         router.refresh();
@@ -273,16 +272,9 @@ export function SalesClient({
               {/* Klijent */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Klijent (opciono)</label>
-                <select
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
-                >
-                  <option value="">Anonimna prodaja</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
-                  ))}
-                </select>
+                <div className="mt-1">
+                  <CustomerPicker value={selectedCustomer} onChange={setSelectedCustomer} placeholder="Anonimna prodaja — ili pretraži klijenta..." />
+                </div>
               </div>
 
               {/* Način plaćanja */}
