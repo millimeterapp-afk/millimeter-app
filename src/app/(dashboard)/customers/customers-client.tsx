@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createCustomer, importCustomers, generateCustomerTemplate } from "@/lib/actions/customers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, X, Upload, Download } from "lucide-react";
+import { Search, Plus, X, Upload, Download, Merge, PhoneOff } from "lucide-react";
 import Link from "next/link";
 import type { Customer } from "@/lib/db/schema";
 
@@ -30,13 +30,14 @@ interface CustomerStats {
 }
 
 export function CustomersClient({
-  customers, total, q, page, stats,
+  customers, total, q, page, stats, noPhone = false,
 }: {
   customers: Customer[];
   total: number;
   q: string;
   page: number;
   stats: CustomerStats;
+  noPhone?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -49,17 +50,19 @@ export function CustomersClient({
   const [importResult, setImportResult] = useState<{ inserted: number; skipped: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const filterSuffix = noPhone ? "&noPhone=1" : "";
+
   useEffect(() => {
     const t = setTimeout(() => {
       if (search !== q) {
-        router.replace(`/customers?q=${encodeURIComponent(search)}`);
+        router.replace(`/customers?q=${encodeURIComponent(search)}${filterSuffix}`);
       }
     }, 350);
     return () => clearTimeout(t);
-  }, [search, q, router]);
+  }, [search, q, router, filterSuffix]);
 
   const goToPage = (p: number) =>
-    router.replace(`/customers?q=${encodeURIComponent(q)}&page=${p}`);
+    router.replace(`/customers?q=${encodeURIComponent(q)}&page=${p}${filterSuffix}`);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const filtered = customers;
@@ -120,9 +123,19 @@ export function CustomersClient({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Klijenti</h1>
-          <p className="text-muted-foreground text-sm mt-1">{stats.total} ukupno klijenata</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {noPhone ? `${total} klijenata bez broja telefona` : `${stats.total} ukupno klijenata`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link href={noPhone ? "/customers" : "/customers?noPhone=1"}
+            className={`flex items-center gap-2 border px-4 py-2 rounded-md text-sm transition-colors ${noPhone ? "bg-amber-100 border-amber-300 text-amber-800" : "hover:bg-muted"}`}>
+            <PhoneOff className="w-4 h-4" /> {noPhone ? "Bez broja ✓" : "Bez broja"}
+          </Link>
+          <Link href="/customers/duplikati"
+            className="flex items-center gap-2 border px-4 py-2 rounded-md text-sm hover:bg-muted transition-colors">
+            <Merge className="w-4 h-4" /> Mogući duplikati
+          </Link>
           <button onClick={handleDownloadTemplate} disabled={isPending}
             className="flex items-center gap-2 border px-4 py-2 rounded-md text-sm hover:bg-muted transition-colors disabled:opacity-50">
             <Download className="w-4 h-4" /> Template

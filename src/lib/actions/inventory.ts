@@ -187,7 +187,8 @@ export async function receiveInventoryItem(
 ) {
   const { user, dbUser } = await getCurrentUser();
   const companyId = dbUser.companyId!;
-  if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Količina prijema mora biti broj > 0.");
+  // Zaliha gotovih artikala je cjelobrojna (integer kolona) — prijem mora biti cio broj
+  if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Količina prijema mora biti cio broj > 0.");
 
   await db.transaction(async (tx) => {
     const updated = await tx

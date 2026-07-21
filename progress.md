@@ -90,12 +90,21 @@
 - [2026-07-20] ✅ **Signal za materijal** (Aleksandrov zahtjev): zvono pokazuje „Materijal stigao — nalog može u izradu" za naloge u fazi `ceka_materijal` čiji je materijal sad na stanju.
 - [2026-07-20] ✅ **„Munro nedostupan" poruka** (pre-mortem): `getGoCreateOrdersSafe` razlikuje „nema naloga" od „API pao"; detalj Munro naloga pokazuje narandžastu poruku umjesto tihe praznine.
 
+## Urađeno (20.7 — Codex round-2 popravke, sve live/verifikovano)
+- [2026-07-20] 🔴 **CRITICAL PostgREST bypass zatvoren**: `REVOKE ALL` na svim public tabelama/sekvencama/funkcijama za `anon`+`authenticated` + `ALTER DEFAULT PRIVILEGES` (buduće tabele). PostgREST sad ne može ni da pokuša pristup — RLS je druga linija. `get_my_company_id()` dobio `is_active = true LIMIT 1`. **Provjereno live: 0 preostalih grantova, app čita 4768 klijenata normalno.** rls.sql dopunjen (KORAK 0 + munro_orders).
+- [2026-07-20] ✅ **HIGH 1+2 — totalSpent = stvarno NAPLAĆEN novac**: uklonjeno pripisivanje po vrijednosti robe; sada se knjiži na avansu (createPurchase), doplati (addPurchasePayment) i prodaji. `updateNalogStatus` broji posjetu IZVEDENO iz cijele porudžbine (simetrično open↔completed), bez diranja totalSpent.
+- [2026-07-20] ✅ **HIGH 3 — createSale**: cijena artikla iz baze (`sale_price`) pod `FOR UPDATE`, provjera dostupnosti (`quantity − reserved`), klijentu se ne vjeruje ni cijena ni stanje.
+- [2026-07-20] ✅ **HIGH 4 — legacy updateOrderStatus**: no-op za isti status (dupli klik ne knjiži dvaput), sve u jednoj transakciji, `company_id` na svim update-ima materijala.
+- [2026-07-20] ✅ **HIGH 5 — preplata kod smanjenja porudžbine**: graciozno — detalj pokazuje „Za povraćaj" (narandžasto), „+ Uplata" se sakriva. Bez tvrdog `paid<=total` constraint-a (otkaz naloga poslije avansa je legitiman).
+- [2026-07-20] ✅ **MEDIUM/LOW**: createOrder/updateAppointment tenant provjera klijenta + validacija iznosa/termina; createSupplierInvoice kurs>0 i carina 0–100 + cijela u transakciji; postInvoice `FOR UPDATE` (nema duplog knjiženja zaliha) + `company_id` scope; getCurrentProfile → requireActiveUser; getCustomer munroOrders filtriran po firmi; receiveInventoryItem traži cio broj.
+- [2026-07-20] ✅ **Quality gate zeleno**: `tsc --noEmit` 0, `eslint` 0 grešaka (4 bezopasna warninga), `next build` prolazi.
+
 ## GO-LIVE GATE (20–25.7) — ostalo, dio čeka klijenta
 - [ ] **Repo → Private** (Matej, GitHub, 2 min) — kod je javan, PII/logika unutra
 - [ ] **Supabase Pro** (~$25/mj, bekapi) — Matej pali pred prvi radni dan
 - [ ] **Nikolina lozinka** promijeniti (Nikola)
 - [ ] `app.millimeter.rs` subdomen (0 troška, domen već plaćaju)
-- [ ] `/security-audit` finalni prolaz + ponovni Codex Blok 1+2+3
+- [ ] Ponovni Codex prolaz (round-3) da potvrdi round-2 popravke
 - [ ] Role matrica (čeka Nikolinu potvrdu tačnih prava)
 
 ## Traženo od klijenta (mejl 19.7)

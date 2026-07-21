@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { users, companies } from "@/lib/db/schema";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth";
@@ -13,13 +13,13 @@ async function getCurrentUser() {
 }
 
 export async function getCurrentProfile() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  return db.query.users.findFirst({
-    where: (u, { eq }) => eq(u.id, user.id),
-  });
+  // Vraća profil samo za prijavljenog i AKTIVNog korisnika; inače null.
+  try {
+    const { dbUser } = await requireActiveUser();
+    return dbUser;
+  } catch {
+    return null;
+  }
 }
 
 export async function getUsers() {

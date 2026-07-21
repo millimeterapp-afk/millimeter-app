@@ -94,6 +94,23 @@ export async function updateAppointment(
   }
 ) {
   const { dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
+
+  // Validacija termina/trajanja ako se mijenjaju
+  if (data.scheduledAt && isNaN(new Date(data.scheduledAt).getTime()))
+    throw new Error("Neispravan datum termina.");
+  if (data.durationMinutes !== undefined &&
+      (!Number.isFinite(data.durationMinutes) || data.durationMinutes <= 0 || data.durationMinutes > 1440))
+    throw new Error("Trajanje mora biti između 1 i 1440 minuta.");
+
+  // Ako se mijenja klijent — mora pripadati firmi
+  if (data.customerId) {
+    const cust = await db.query.customers.findFirst({
+      where: (c, { eq, and, isNull }) =>
+        and(eq(c.id, data.customerId!), eq(c.companyId, companyId), isNull(c.deletedAt)),
+    });
+    if (!cust) throw new Error("Klijent nije pronađen.");
+  }
 
   await db
     .update(appointments)
@@ -104,7 +121,7 @@ export async function updateAppointment(
       ...(data.type !== undefined && { type: data.type }),
       ...(data.notes !== undefined && { notes: data.notes || null }),
     })
-    .where(and(eq(appointments.id, id), eq(appointments.companyId, dbUser.companyId!)));
+    .where(and(eq(appointments.id, id), eq(appointments.companyId, companyId)));
 
   revalidatePath("/appointments");
 }

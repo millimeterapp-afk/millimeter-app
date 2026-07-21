@@ -148,12 +148,16 @@ export async function createSupplierInvoice(data: {
 
   // — Validacija —
   if (!data.invoiceNumber || !data.invoiceNumber.trim()) throw new Error("Broj fakture je obavezan.");
+  if (data.exchangeRate != null && (!Number.isFinite(data.exchangeRate) || data.exchangeRate <= 0))
+    throw new Error("Kurs mora biti broj > 0.");
   for (const it of data.items) {
     if (!Number.isFinite(it.quantity) || it.quantity <= 0) throw new Error("Količina stavke mora biti > 0.");
     if (!Number.isFinite(it.unitPrice) || it.unitPrice < 0) throw new Error("Cena stavke mora biti ≥ 0.");
   }
   for (const c of data.additionalCosts) {
     if (c.amount != null && (!Number.isFinite(c.amount) || c.amount < 0)) throw new Error("Dodatni trošak mora biti ≥ 0.");
+    if (c.customsDutyRate != null && (!Number.isFinite(c.customsDutyRate) || c.customsDutyRate < 0 || c.customsDutyRate > 100))
+      throw new Error("Stopa carine mora biti između 0 i 100.");
   }
   // Dobavljač i svi materijali/artikli moraju pripadati firmi (cross-tenant zaštita)
   if (data.supplierId) {
@@ -191,94 +195,93 @@ export async function createSupplierInvoice(data: {
 
   const totalAmount = subtotal + totalAdditional;
 
-  const [invoice] = await db
-    .insert(supplierInvoices)
-    .values({
-      companyId: dbUser.companyId!,
-      supplierId: data.supplierId || null,
-      invoiceNumber: data.invoiceNumber,
-      invoiceDate: data.invoiceDate,
-      currency: data.currency || "EUR",
-      exchangeRate: String(data.exchangeRate ?? 1),
-      subtotal: String(subtotal),
-      totalAdditionalCosts: String(totalAdditional),
-      totalAmount: String(totalAmount),
-      status: "draft",
-      notes: data.notes || null,
-      createdBy: user.id,
-    })
-    .returning();
-
-  // Dodaj stavke i alociraj troškove proporcionalno
-  if (data.items.length > 0) {
-    const itemsWithTotal = data.items.map((item) => ({
-      ...item,
-      total: item.quantity * item.unitPrice,
-    }));
-
-    await db.insert(supplierInvoiceItems).values(
-      itemsWithTotal.map((item) => {
-        const proportion = subtotal > 0 ? item.total / subtotal : 0;
-        const allocated = totalAdditional * proportion;
-        const finalUnitCost = item.quantity > 0
-          ? (item.total + allocated) / item.quantity
-          : item.unitPrice;
-
-        return {
-          invoiceId: invoice.id,
-          materialId: item.materialId || null,
-          inventoryItemId: item.inventoryItemId || null,
-          description: item.description,
-          quantity: String(item.quantity),
-          unitPrice: String(item.unitPrice),
-          totalPrice: String(item.total),
-          allocatedAdditionalCost: String(allocated),
-          finalUnitCost: String(finalUnitCost),
-        };
+  // Sve (faktura + stavke + cijene materijala/artikala + dodatni troškovi) u jednoj transakciji
+  const invoice = await db.transaction(async (tx) => {
+    const [inv] = await tx
+      .insert(supplierInvoices)
+      .values({
+        companyId,
+        supplierId: data.supplierId || null,
+        invoiceNumber: data.invoiceNumber,
+        invoiceDate: data.invoiceDate,
+        currency: data.currency || "EUR",
+        exchangeRate: String(data.exchangeRate ?? 1),
+        subtotal: String(subtotal),
+        totalAdditionalCosts: String(totalAdditional),
+        totalAmount: String(totalAmount),
+        status: "draft",
+        notes: data.notes || null,
+        createdBy: user.id,
       })
-    );
+      .returning();
 
-    // Ažuriraj lastPurchasePrice za materijale
-    for (const item of itemsWithTotal) {
-      if (item.materialId) {
+    // Dodaj stavke i alociraj troškove proporcionalno
+    if (data.items.length > 0) {
+      const itemsWithTotal = data.items.map((item) => ({
+        ...item,
+        total: item.quantity * item.unitPrice,
+      }));
+
+      await tx.insert(supplierInvoiceItems).values(
+        itemsWithTotal.map((item) => {
+          const proportion = subtotal > 0 ? item.total / subtotal : 0;
+          const allocated = totalAdditional * proportion;
+          const finalUnitCost = item.quantity > 0
+            ? (item.total + allocated) / item.quantity
+            : item.unitPrice;
+
+          return {
+            invoiceId: inv.id,
+            materialId: item.materialId || null,
+            inventoryItemId: item.inventoryItemId || null,
+            description: item.description,
+            quantity: String(item.quantity),
+            unitPrice: String(item.unitPrice),
+            totalPrice: String(item.total),
+            allocatedAdditionalCost: String(allocated),
+            finalUnitCost: String(finalUnitCost),
+          };
+        })
+      );
+
+      // Ažuriraj lastPurchasePrice za materijale / costPrice za artikle
+      for (const item of itemsWithTotal) {
         const proportion = subtotal > 0 ? item.total / subtotal : 0;
         const allocated = totalAdditional * proportion;
         const finalUnitCost = item.quantity > 0
           ? (item.total + allocated) / item.quantity
           : item.unitPrice;
 
-        await db.update(materials)
-          .set({ lastPurchasePrice: String(finalUnitCost) })
-          .where(and(eq(materials.id, item.materialId), eq(materials.companyId, companyId)));
-      }
-      if (item.inventoryItemId) {
-        const proportion = subtotal > 0 ? item.total / subtotal : 0;
-        const allocated = totalAdditional * proportion;
-        const finalUnitCost = item.quantity > 0
-          ? (item.total + allocated) / item.quantity
-          : item.unitPrice;
-
-        await db.update(inventoryItems)
-          .set({ costPrice: String(finalUnitCost) })
-          .where(and(eq(inventoryItems.id, item.inventoryItemId), eq(inventoryItems.companyId, companyId)));
+        if (item.materialId) {
+          await tx.update(materials)
+            .set({ lastPurchasePrice: String(finalUnitCost) })
+            .where(and(eq(materials.id, item.materialId), eq(materials.companyId, companyId)));
+        }
+        if (item.inventoryItemId) {
+          await tx.update(inventoryItems)
+            .set({ costPrice: String(finalUnitCost) })
+            .where(and(eq(inventoryItems.id, item.inventoryItemId), eq(inventoryItems.companyId, companyId)));
+        }
       }
     }
-  }
 
-  // Dodaj dodatne troškove
-  if (data.additionalCosts.length > 0) {
-    await db.insert(invoiceAdditionalCosts).values(
-      data.additionalCosts.map((cost) => ({
-        invoiceId: invoice.id,
-        costType: cost.costType,
-        description: cost.description || null,
-        amount: cost.costType === "customs_duty" && cost.customsDutyRate
-          ? String((subtotal * cost.customsDutyRate) / 100)
-          : String(cost.amount),
-        customsDutyRate: cost.customsDutyRate ? String(cost.customsDutyRate) : null,
-      }))
-    );
-  }
+    // Dodaj dodatne troškove
+    if (data.additionalCosts.length > 0) {
+      await tx.insert(invoiceAdditionalCosts).values(
+        data.additionalCosts.map((cost) => ({
+          invoiceId: inv.id,
+          costType: cost.costType,
+          description: cost.description || null,
+          amount: cost.costType === "customs_duty" && cost.customsDutyRate
+            ? String((subtotal * cost.customsDutyRate) / 100)
+            : String(cost.amount),
+          customsDutyRate: cost.customsDutyRate ? String(cost.customsDutyRate) : null,
+        }))
+      );
+    }
+
+    return inv;
+  });
 
   revalidatePath("/suppliers");
   return invoice;
@@ -286,35 +289,42 @@ export async function createSupplierInvoice(data: {
 
 export async function postInvoice(id: string) {
   const { dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
 
-  // Dohvati fakturu sa stavkama
-  const invoice = await db.query.supplierInvoices.findFirst({
-    where: (si, { eq, and }) =>
-      and(eq(si.id, id), eq(si.companyId, dbUser.companyId!)),
-    with: { items: true },
+  // Sve u transakciji sa zaključavanjem fakture — dvostruki klik/tab inače
+  // duplo poveća zalihe.
+  await db.transaction(async (tx) => {
+    const rows = (await tx.execute(
+      sql`SELECT id, status FROM supplier_invoices
+          WHERE id = ${id} AND company_id = ${companyId} FOR UPDATE`
+    )) as unknown as { id: string; status: string }[];
+    const locked = rows[0];
+    if (!locked) throw new Error("Faktura nije pronađena");
+    if (locked.status === "posted") throw new Error("Faktura je već knjižena");
+
+    const items = await tx.query.supplierInvoiceItems.findMany({
+      where: (ii, { eq }) => eq(ii.invoiceId, id),
+    });
+
+    // Povećaj stanje zaliha za svaku stavku (scoped po firmi)
+    for (const item of items) {
+      const qty = Number(item.quantity);
+      if (item.materialId) {
+        await tx.update(materials)
+          .set({ currentStock: sql`current_stock + ${qty}`, updatedAt: new Date() })
+          .where(and(eq(materials.id, item.materialId), eq(materials.companyId, companyId)));
+      }
+      if (item.inventoryItemId) {
+        await tx.update(inventoryItems)
+          .set({ quantity: sql`quantity + ${qty}` })
+          .where(and(eq(inventoryItems.id, item.inventoryItemId), eq(inventoryItems.companyId, companyId)));
+      }
+    }
+
+    await tx.update(supplierInvoices)
+      .set({ status: "posted" })
+      .where(and(eq(supplierInvoices.id, id), eq(supplierInvoices.companyId, companyId)));
   });
-
-  if (!invoice) throw new Error("Faktura nije pronađena");
-  if (invoice.status === "posted") throw new Error("Faktura je već knjižena");
-
-  // Povećaj stanje zaliha za svaku stavku
-  for (const item of invoice.items) {
-    const qty = Number(item.quantity);
-    if (item.materialId) {
-      await db.update(materials)
-        .set({ currentStock: sql`current_stock + ${qty}`, updatedAt: new Date() })
-        .where(eq(materials.id, item.materialId));
-    }
-    if (item.inventoryItemId) {
-      await db.update(inventoryItems)
-        .set({ quantity: sql`quantity + ${qty}` })
-        .where(eq(inventoryItems.id, item.inventoryItemId));
-    }
-  }
-
-  await db.update(supplierInvoices)
-    .set({ status: "posted" })
-    .where(and(eq(supplierInvoices.id, id), eq(supplierInvoices.companyId, dbUser.companyId!)));
 
   revalidatePath("/suppliers");
 }

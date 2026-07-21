@@ -1122,9 +1122,9 @@ ${order.notes ? `
                 <p className="text-xl font-bold text-green-600">RSD {payPaid.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Ostatak</p>
-                <p className={`text-xl font-bold ${remaining > 0 ? "text-red-600" : "text-green-600"}`}>
-                  RSD {remaining.toLocaleString()}
+                <p className="text-xs text-muted-foreground">{remaining < 0 ? "Za povraćaj" : "Ostatak"}</p>
+                <p className={`text-xl font-bold ${remaining > 0 ? "text-red-600" : remaining < 0 ? "text-amber-600" : "text-green-600"}`}>
+                  RSD {Math.abs(remaining).toLocaleString()}
                 </p>
               </div>
               <div className="ml-auto">

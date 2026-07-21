@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { orders, materialReservations, productionTasks, materials, customers } from "@/lib/db/schema";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
-import { applyLoyaltyTier } from "@/lib/loyalty";
+import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -80,10 +80,21 @@ export async function createOrder(data: {
   measurementSnapshot?: Record<string, unknown>;
 }) {
   const { user, dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
 
-  const orderNumber = await generateOrderNumber(dbUser.companyId!);
+  if (!Number.isFinite(data.totalAmount) || data.totalAmount < 0)
+    throw new Error("Iznos mora biti broj ≥ 0.");
 
-  // Automatski kopiraj aktivna merenja klijenta ako nisu prosleđena
+  // Klijent mora pripadati firmi
+  const cust = await db.query.customers.findFirst({
+    where: (c, { eq, and, isNull }) =>
+      and(eq(c.id, data.customerId), eq(c.companyId, companyId), isNull(c.deletedAt)),
+  });
+  if (!cust) throw new Error("Klijent nije pronađen.");
+
+  const orderNumber = await generateOrderNumber(companyId);
+
+  // Klijent je gore provjeren da pripada firmi → filter po customerId je siguran
   let snapshot = data.measurementSnapshot;
   if (!snapshot && data.customerId) {
     const activeMeasurement = await db.query.customerMeasurements.findFirst({
@@ -152,6 +163,10 @@ export async function updateOrderStatus(
     throw new Error("Ovaj nalog pripada porudžbini — koristi 'Fazu izrade', ne stari tok.");
   }
 
+  // No-op: isti status → ne diraj ništa. Bez ovoga bi dupli klik na "isporučeno"
+  // dva puta knjižio totalSpent i posjetu klijentu.
+  if (order.status === status) return;
+
   const updates: Record<string, unknown> = { status, updatedAt: new Date() };
 
   if (status === "delivered") {
@@ -161,42 +176,43 @@ export async function updateOrderStatus(
     updates.completedAt = new Date();
   }
 
-  await db
-    .update(orders)
-    .set(updates)
-    .where(and(eq(orders.id, id), eq(orders.companyId, companyId)));
+  // Sve promjene (nalog + materijal + klijent + produkcija) u jednoj transakciji
+  await db.transaction(async (tx) => {
+    await tx
+      .update(orders)
+      .set(updates)
+      .where(and(eq(orders.id, id), eq(orders.companyId, companyId)));
 
-  // Konzumiraj ili otpusti rezervaciju materijala
-  if (status === "delivered" || status === "cancelled") {
-    const reservation = await db.query.materialReservations.findFirst({
-      where: (r, { eq }) => eq(r.orderId, id),
-    });
-    if (reservation && reservation.status === "reserved") {
-      const qty = Number(reservation.quantityReserved);
-      if (status === "delivered") {
-        // Konzumiran — skini i sa currentStock i reservedStock
-        await db.update(materials).set({
-          currentStock: sql`current_stock - ${qty}`,
-          reservedStock: sql`reserved_stock - ${qty}`,
-        }).where(eq(materials.id, reservation.materialId));
-        await db.update(materialReservations).set({ status: "consumed" })
-          .where(eq(materialReservations.id, reservation.id));
-      } else {
-        // Otkazan — samo otpusti rezervaciju
-        await db.update(materials).set({
-          reservedStock: sql`reserved_stock - ${qty}`,
-        }).where(eq(materials.id, reservation.materialId));
-        await db.update(materialReservations).set({ status: "released" })
-          .where(eq(materialReservations.id, reservation.id));
+    // Konzumiraj ili otpusti rezervaciju materijala
+    if (status === "delivered" || status === "cancelled") {
+      const reservation = await tx.query.materialReservations.findFirst({
+        where: (r, { eq }) => eq(r.orderId, id),
+      });
+      if (reservation && reservation.status === "reserved") {
+        const qty = Number(reservation.quantityReserved);
+        if (status === "delivered") {
+          // Konzumiran — skini i sa currentStock i reservedStock
+          await tx.update(materials).set({
+            currentStock: sql`current_stock - ${qty}`,
+            reservedStock: sql`reserved_stock - ${qty}`,
+          }).where(and(eq(materials.id, reservation.materialId), eq(materials.companyId, companyId)));
+          await tx.update(materialReservations).set({ status: "consumed" })
+            .where(eq(materialReservations.id, reservation.id));
+        } else {
+          // Otkazan — samo otpusti rezervaciju
+          await tx.update(materials).set({
+            reservedStock: sql`reserved_stock - ${qty}`,
+          }).where(and(eq(materials.id, reservation.materialId), eq(materials.companyId, companyId)));
+          await tx.update(materialReservations).set({ status: "released" })
+            .where(eq(materialReservations.id, reservation.id));
+        }
       }
     }
-  }
 
-  // Kad je isporučen — ažuriraj totalSpent i visitCount na klijentu
-  // (order je već učitan i provjereno pripada firmi)
-  if (status === "delivered") {
-    if (order.customerId) {
-      await db
+    // Kad je isporučen — ažuriraj totalSpent i visitCount na klijentu
+    // (order je već učitan i provjereno pripada firmi; prelaz je uvijek !delivered→delivered)
+    if (status === "delivered" && order.customerId) {
+      const [updated] = await tx
         .update(customers)
         .set({
           totalSpent: sql`total_spent + ${Number(order.totalAmount)}`,
@@ -204,64 +220,61 @@ export async function updateOrderStatus(
           lastVisitDate: belgradeToday(),
           updatedAt: new Date(),
         })
-        .where(and(eq(customers.id, order.customerId), eq(customers.companyId, companyId)));
+        .where(and(eq(customers.id, order.customerId), eq(customers.companyId, companyId)))
+        .returning({ totalSpent: customers.totalSpent });
 
-      // Ažuriraj loyalty tier
-      const updated = await db.query.customers.findFirst({
-        where: (c, { eq, and }) => and(eq(c.id, order.customerId!), eq(c.companyId, companyId)),
-      });
       if (updated) {
-        await applyLoyaltyTier(order.customerId, Number(updated.totalSpent), companyId);
+        await tx.update(customers)
+          .set({ loyaltyTier: calcLoyaltyTier(Number(updated.totalSpent)) })
+          .where(and(eq(customers.id, order.customerId), eq(customers.companyId, companyId)));
       }
     }
-  }
 
-  // Rezerviši materijal kad nalog postane potvrđen
-  if (status === "confirmed") {
-    if (order.material) {
-      const mat = await db.query.materials.findFirst({
+    // Rezerviši materijal kad nalog postane potvrđen
+    if (status === "confirmed" && order.material) {
+      const mat = await tx.query.materials.findFirst({
         where: (m, { eq, and }) =>
           and(eq(m.name, order.material!), eq(m.companyId, companyId)),
       });
       if (mat) {
-        const existing = await db.query.materialReservations.findFirst({
+        const existing = await tx.query.materialReservations.findFirst({
           where: (r, { eq }) => eq(r.orderId, id),
         });
         if (!existing) {
           const reserveQty = options?.materialQuantity ?? 2;
-          await db.insert(materialReservations).values({
+          await tx.insert(materialReservations).values({
             orderId: id,
             materialId: mat.id,
             quantityReserved: String(reserveQty),
             quantityUsed: "0",
             status: "reserved",
           });
-          await db
+          await tx
             .update(materials)
             .set({ reservedStock: sql`reserved_stock + ${reserveQty}` })
-            .where(eq(materials.id, mat.id));
+            .where(and(eq(materials.id, mat.id), eq(materials.companyId, companyId)));
         }
       }
     }
-  }
 
-  // Automatski kreiraj production task kad ide u produkciju
-  if (status === "in_production") {
-    const existing = await db.query.productionTasks.findFirst({
-      where: (pt, { eq }) => eq(pt.orderId, id),
-    });
-
-    if (!existing) {
-      await db.insert(productionTasks).values({
-        companyId,
-        orderId: id,
-        status: "queued",
-        priority: "medium",
-        dueDate: order.dueDate || null,
-        notesFromStore: order.notes || null,
+    // Automatski kreiraj production task kad ide u produkciju
+    if (status === "in_production") {
+      const existing = await tx.query.productionTasks.findFirst({
+        where: (pt, { eq }) => eq(pt.orderId, id),
       });
+
+      if (!existing) {
+        await tx.insert(productionTasks).values({
+          companyId,
+          orderId: id,
+          status: "queued",
+          priority: "medium",
+          dueDate: order.dueDate || null,
+          notesFromStore: order.notes || null,
+        });
+      }
     }
-  }
+  });
 
   revalidatePath("/orders");
   revalidatePath(`/orders/${id}`);

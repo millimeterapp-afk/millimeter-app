@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import * as XLSX from "xlsx";
 import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders, getGoCreateOrdersSafe } from "@/lib/gocreate";
-import { applyLoyaltyTier } from "@/lib/loyalty";
+import { applyLoyaltyTier, calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
 
 async function getCompanyId() {
@@ -19,20 +19,34 @@ async function getCompanyId() {
 // ─── Brze akcije za velike liste (4.000+ klijenata) ──────────────────────────
 // Puna lista NE ide u browser — server vraća stranicu / top-N / agregate.
 
-export async function getCustomersPage(search: string, page: number, pageSize = 25) {
+// Pretraga tolerantna na "ime prezime": upit se razbije na riječi i SVAKA riječ
+// mora da se nađe u nekom polju (ime ILI prezime ILI telefon ILI mejl). Time
+// "Marko Markovic" pogađa iako je ime "Marko", prezime "Markovic" (u bilo kom redu).
+function buildCustomerSearch(q: string) {
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return undefined;
+  return and(
+    ...tokens.map((t) =>
+      or(
+        ilike(customers.firstName, `%${t}%`),
+        ilike(customers.lastName, `%${t}%`),
+        ilike(customers.phone, `%${t}%`),
+        ilike(customers.email, `%${t}%`)
+      )!
+    )
+  );
+}
+
+export async function getCustomersPage(search: string, page: number, pageSize = 25, noPhoneOnly = false) {
   const companyId = await getCompanyId();
   const conditions = [eq(customers.companyId, companyId), isNull(customers.deletedAt)];
   const q = (search || "").trim();
   if (q) {
-    conditions.push(
-      or(
-        ilike(customers.firstName, `%${q}%`),
-        ilike(customers.lastName, `%${q}%`),
-        ilike(customers.phone, `%${q}%`),
-        ilike(customers.email, `%${q}%`)
-      )!
-    );
+    const sc = buildCustomerSearch(q);
+    if (sc) conditions.push(sc);
   }
+  // Filter "bez broja" — klijenti bez telefona (uglavnom uvezeni iz Munra), za brzi unos
+  if (noPhoneOnly) conditions.push(sql`NULLIF(TRIM(${customers.phone}), '') IS NULL`);
   const safePage = Math.max(1, Math.floor(page) || 1);
   const [rows, cnt] = await Promise.all([
     db.select().from(customers).where(and(...conditions))
@@ -57,14 +71,163 @@ export async function searchCustomersLite(query: string, id?: string) {
     .where(and(
       eq(customers.companyId, companyId),
       isNull(customers.deletedAt),
-      or(
-        ilike(customers.firstName, `%${q}%`),
-        ilike(customers.lastName, `%${q}%`),
-        ilike(customers.phone, `%${q}%`)
-      )!
+      buildCustomerSearch(q)
     ))
     .orderBy(customers.lastName, customers.firstName)
     .limit(20);
+}
+
+// ─── Spajanje klijenata (dedup) ───────────────────────────────────────────────
+// Spaja duplikate (loseIds) u jednog koji ostaje (keepId): prebaci SVU istoriju,
+// popuni prazna polja keep-a, saberi novac/posjete/poene, pa soft-briši duplikate.
+// Aleksandar ovim spaja sam u aplikaciji, bez "peške pa šaljem Mateju".
+const nonEmpty = (v: unknown) => v != null && String(v).trim() !== "";
+
+export async function mergeCustomers(keepId: string, loseIds: string[]) {
+  const companyId = await getCompanyId();
+  const losers = [...new Set(loseIds)].filter((id) => id && id !== keepId);
+  if (losers.length === 0) throw new Error("Nema koga da se spoji.");
+
+  await db.transaction(async (tx) => {
+    // Zaključaj sve u sortiranom redoslijedu (izbjegava deadlock kod paralelnih merge-ova)
+    const allIds = [keepId, ...losers].sort();
+    for (const id of allIds) {
+      await tx.execute(sql`SELECT id FROM customers WHERE id = ${id} AND company_id = ${companyId} FOR UPDATE`);
+    }
+
+    const rows = await tx.select().from(customers)
+      .where(and(inArray(customers.id, allIds), eq(customers.companyId, companyId)));
+    const keep = rows.find((r) => r.id === keepId);
+    if (!keep || keep.deletedAt) throw new Error("Klijent koji ostaje nije pronađen.");
+    const loseRows = rows.filter((r) => losers.includes(r.id) && !r.deletedAt);
+    if (loseRows.length === 0) throw new Error("Duplikati nisu pronađeni.");
+    const realLosers = loseRows.map((r) => r.id);
+
+    // 1) Prebaci sve reference. Tabele SA company_id:
+    for (const lid of realLosers) {
+      for (const t of ["purchases", "orders", "munro_orders", "corrections", "sales", "payments", "appointments"]) {
+        await tx.execute(sql`UPDATE ${sql.raw(t)} SET customer_id = ${keepId} WHERE customer_id = ${lid} AND company_id = ${companyId}`);
+      }
+      // Tabele BEZ company_id (lid je već potvrđen da pripada firmi):
+      for (const t of ["customer_measurements", "loyalty_events"]) {
+        await tx.execute(sql`UPDATE ${sql.raw(t)} SET customer_id = ${keepId} WHERE customer_id = ${lid}`);
+      }
+    }
+
+    // 2) Popuni prazna polja keep-a iz duplikata; saberi novac/posjete/poene
+    const pick = <T,>(cur: T, alts: T[]): T => (nonEmpty(cur) ? cur : (alts.find(nonEmpty) ?? cur));
+    const fv = [keep.firstVisitDate, ...loseRows.map((r) => r.firstVisitDate)].filter(Boolean).sort() as string[];
+    const lv = [keep.lastVisitDate, ...loseRows.map((r) => r.lastVisitDate)].filter(Boolean).sort() as string[];
+    const notesParts = [keep.notes, ...loseRows.map((r) => r.notes)].filter(nonEmpty) as string[];
+    const totalSpent = [keep, ...loseRows].reduce((s, r) => s + Number(r.totalSpent || 0), 0);
+    const visitCount = [keep, ...loseRows].reduce((s, r) => s + Number(r.visitCount || 0), 0);
+    const loyaltyPoints = [keep, ...loseRows].reduce((s, r) => s + Number(r.loyaltyPoints || 0), 0);
+
+    await tx.update(customers).set({
+      phone: pick(keep.phone, loseRows.map((r) => r.phone)),
+      email: pick(keep.email, loseRows.map((r) => r.email)),
+      city: pick(keep.city, loseRows.map((r) => r.city)),
+      address: pick(keep.address, loseRows.map((r) => r.address)),
+      dateOfBirth: pick(keep.dateOfBirth, loseRows.map((r) => r.dateOfBirth)),
+      templateNumber: pick(keep.templateNumber, loseRows.map((r) => r.templateNumber)),
+      goCreateCustomerId: pick(keep.goCreateCustomerId, loseRows.map((r) => r.goCreateCustomerId)),
+      notes: notesParts.length ? notesParts.join(" | ") : null,
+      totalSpent: String(totalSpent),
+      visitCount,
+      loyaltyPoints,
+      loyaltyTier: calcLoyaltyTier(totalSpent),
+      firstVisitDate: fv[0] ?? null,
+      lastVisitDate: lv.length ? lv[lv.length - 1] : null,
+      updatedAt: new Date(),
+    }).where(and(eq(customers.id, keepId), eq(customers.companyId, companyId)));
+
+    // 3) Soft-briši duplikate
+    await tx.update(customers).set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(inArray(customers.id, realLosers), eq(customers.companyId, companyId)));
+  });
+
+  revalidatePath("/customers");
+  revalidatePath("/customers/duplikati");
+  return { merged: losers.length };
+}
+
+// ─── Kandidati za spajanje (dva pristupa) ─────────────────────────────────────
+export type DupMember = { id: string; firstName: string; lastName: string; phone: string; munro: number; orders: number; totalSpent: number; lastVisit: string | null };
+export type DupGroup = { key: string; members: DupMember[] };
+export type VariantMatch = {
+  noPhone: { id: string; firstName: string; lastName: string; munro: number };
+  candidates: { id: string; firstName: string; lastName: string; phone: string; munro: number; totalSpent: number; lastVisit: string | null }[];
+};
+
+export async function getDuplicateCandidates(): Promise<{ exactDupes: DupGroup[]; nameVariants: VariantMatch[] }> {
+  const companyId = await getCompanyId();
+
+  // A) Isto ime+prezime, više unosa (imenjaci ILI isti čovjek dvaput)
+  const exactRows = (await db.execute(sql`
+    WITH n AS (
+      SELECT c.id, c.first_name, c.last_name, c.phone, c.last_visit_date, c.total_spent,
+        lower(trim(c.first_name) || ' ' || trim(c.last_name)) AS k,
+        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id) AS munro,
+        (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id) AS orders
+      FROM customers c
+      WHERE c.company_id = ${companyId} AND c.deleted_at IS NULL
+        AND trim(c.first_name) <> '' AND trim(c.last_name) <> ''
+    ), d AS (SELECT k FROM n GROUP BY k HAVING count(*) > 1)
+    SELECT id, first_name AS "firstName", last_name AS "lastName", phone,
+           last_visit_date AS "lastVisit", total_spent AS "totalSpent", munro, orders, k
+    FROM n WHERE k IN (SELECT k FROM d)
+    ORDER BY k, last_name, first_name
+    LIMIT 1000
+  `)) as unknown as (DupMember & { k: string })[];
+
+  const groupMap = new Map<string, DupMember[]>();
+  for (const r of exactRows) {
+    const arr = groupMap.get(r.k) ?? [];
+    arr.push({ id: r.id, firstName: r.firstName, lastName: r.lastName, phone: r.phone,
+      munro: Number(r.munro), orders: Number(r.orders), totalSpent: Number(r.totalSpent), lastVisit: r.lastVisit });
+    groupMap.set(r.k, arr);
+  }
+  const exactDupes: DupGroup[] = [...groupMap.entries()].map(([key, members]) => ({ key, members }));
+
+  // B) Isto prezime + isto prvo slovo imena; jedan BEZ broja (iz Munra) + jedan SA brojem
+  //    (hvata "Eki/Elvir" varijantu imena koju exact-match ne vidi)
+  const variantRows = (await db.execute(sql`
+    WITH np AS (
+      SELECT c.id, c.first_name, c.last_name, lower(trim(c.last_name)) AS ln, left(lower(trim(c.first_name)),1) AS fi,
+        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id) AS munro
+      FROM customers c
+      WHERE c.company_id = ${companyId} AND c.deleted_at IS NULL
+        AND NULLIF(trim(c.phone),'') IS NULL AND trim(c.last_name) <> '' AND trim(c.first_name) <> ''
+    ), wp AS (
+      SELECT c.id, c.first_name, c.last_name, c.phone, lower(trim(c.last_name)) AS ln, left(lower(trim(c.first_name)),1) AS fi,
+        c.last_visit_date, c.total_spent,
+        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id) AS munro
+      FROM customers c
+      WHERE c.company_id = ${companyId} AND c.deleted_at IS NULL
+        AND NULLIF(trim(c.phone),'') IS NOT NULL AND trim(c.last_name) <> '' AND trim(c.first_name) <> ''
+    )
+    SELECT np.id AS "npId", np.first_name AS "npFirst", np.last_name AS "npLast", np.munro AS "npMunro",
+           wp.id AS "wpId", wp.first_name AS "wpFirst", wp.last_name AS "wpLast", wp.phone AS "wpPhone",
+           wp.munro AS "wpMunro", wp.last_visit_date AS "wpLastVisit", wp.total_spent AS "wpTotalSpent"
+    FROM np JOIN wp ON wp.ln = np.ln AND wp.fi = np.fi
+    ORDER BY np.last_name, np.first_name
+    LIMIT 600
+  `)) as unknown as Record<string, string | number | null>[];
+
+  const varMap = new Map<string, VariantMatch>();
+  for (const r of variantRows) {
+    const npId = String(r.npId);
+    let v = varMap.get(npId);
+    if (!v) {
+      v = { noPhone: { id: npId, firstName: String(r.npFirst), lastName: String(r.npLast), munro: Number(r.npMunro) }, candidates: [] };
+      varMap.set(npId, v);
+    }
+    v.candidates.push({ id: String(r.wpId), firstName: String(r.wpFirst), lastName: String(r.wpLast),
+      phone: String(r.wpPhone), munro: Number(r.wpMunro), totalSpent: Number(r.wpTotalSpent),
+      lastVisit: r.wpLastVisit ? String(r.wpLastVisit) : null });
+  }
+
+  return { exactDupes, nameVariants: [...varMap.values()] };
 }
 
 // Agregati za dashboard/izvještaje — umjesto slanja svih klijenata u browser
@@ -142,6 +305,7 @@ export async function getCustomer(id: string) {
         orderBy: (c, { desc }) => [desc(c.createdAt)],
       },
       munroOrders: {
+        where: (m, { eq }) => eq(m.companyId, companyId),
         orderBy: (m, { desc }) => [desc(m.createdDate)],
       },
     },

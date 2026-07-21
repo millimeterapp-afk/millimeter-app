@@ -12,7 +12,24 @@
 --   • Supabase PostgREST API → RLS štiti direktan pristup
 --   • Svi autentifikovani korisnici vide samo svoju firmu
 --   • Anon korisnici ne vide ništa (nema anon policy-ja)
+--   • DODATNO (KORAK 0): anon i authenticated rolama je ODUZET (REVOKE) svaki
+--     grant na tabele/sekvence/funkcije — PostgREST tako ne može ni da pokuša
+--     pristup (RLS je druga linija odbrane, REVOKE je prva). auth i dalje radi
+--     jer ide preko GoTrue/auth šeme, ne preko public tabela.
 -- ============================================================
+
+-- ──────────────────────────────────────────────────────────
+-- KORAK 0: Oduzmi PostgREST rolama svaki pristup public šemi (prva linija)
+-- Idempotentno — može se pokretati više puta.
+-- ──────────────────────────────────────────────────────────
+
+REVOKE ALL PRIVILEGES ON ALL TABLES    IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated;
+-- Buduće tabele/sekvence/funkcije (npr. poslije drizzle push-a) takođe bez grantova
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES    FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
 
 -- ──────────────────────────────────────────────────────────
 -- KORAK 1: Helper funkcija (izbjegava rekurziju na users tabeli)
@@ -25,7 +42,9 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT company_id FROM users WHERE id = auth.uid()
+  SELECT company_id FROM public.users
+  WHERE id = auth.uid() AND is_active = true
+  LIMIT 1
 $$;
 
 -- ──────────────────────────────────────────────────────────
@@ -53,6 +72,7 @@ DROP POLICY IF EXISTS "company_isolation" ON supplier_invoices;
 DROP POLICY IF EXISTS "company_isolation" ON supplier_invoice_items;
 DROP POLICY IF EXISTS "company_isolation" ON invoice_additional_costs;
 DROP POLICY IF EXISTS "company_isolation" ON audit_logs;
+DROP POLICY IF EXISTS "company_isolation" ON munro_orders;
 
 -- ──────────────────────────────────────────────────────────
 -- KORAK 3: Uključivanje RLS na svim tabelama
@@ -81,6 +101,7 @@ ALTER TABLE supplier_invoices       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE supplier_invoice_items  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoice_additional_costs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE munro_orders            ENABLE ROW LEVEL SECURITY;
 
 -- ──────────────────────────────────────────────────────────
 -- KORAK 4: Policy-ji za tabele sa direktnim company_id
@@ -178,6 +199,12 @@ CREATE POLICY "company_isolation" ON supplier_invoices
 
 -- audit_logs (company_id je nullable — logovi bez firme nisu vidljivi)
 CREATE POLICY "company_isolation" ON audit_logs
+  AS PERMISSIVE FOR ALL TO authenticated
+  USING (company_id = get_my_company_id())
+  WITH CHECK (company_id = get_my_company_id());
+
+-- munro_orders (uvezena istorija iz GoCreate/Munro — direktan company_id)
+CREATE POLICY "company_isolation" ON munro_orders
   AS PERMISSIVE FOR ALL TO authenticated
   USING (company_id = get_my_company_id())
   WITH CHECK (company_id = get_my_company_id());
