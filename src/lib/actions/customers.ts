@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { customers, customerMeasurements, orders, munroOrders } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { eq, desc, ilike, or, isNull, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, ilike, or, isNull, and, sql, inArray, type AnyColumn } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import * as XLSX from "xlsx";
@@ -19,21 +19,36 @@ async function getCompanyId() {
 // ─── Brze akcije za velike liste (4.000+ klijenata) ──────────────────────────
 // Puna lista NE ide u browser — server vraća stranicu / top-N / agregate.
 
-// Pretraga tolerantna na "ime prezime": upit se razbije na riječi i SVAKA riječ
-// mora da se nađe u nekom polju (ime ILI prezime ILI telefon ILI mejl). Time
-// "Marko Markovic" pogađa iako je ime "Marko", prezime "Markovic" (u bilo kom redu).
+// Pretraga tolerantna na "ime prezime" I na dijakritiku: upit se razbije na riječi,
+// svaka mora da se nađe u nekom polju. Srpska slova se presavijaju (š/č/ć/ž → s/c/c/z,
+// đ → dj) ISTO u JS i u SQL, pa "Milic" nalazi "Milić" i obrnuto. Telefon se poredi
+// samo po ciframa (ignoriše razmake, crtice, +).
+function foldSr(s: string): string {
+  return s
+    .replace(/[šŠ]/g, "s").replace(/[čČćĆ]/g, "c").replace(/[žŽ]/g, "z")
+    .replace(/[đĐ]/g, "dj")
+    .toLowerCase();
+}
+function foldColSql(col: AnyColumn) {
+  return sql`lower(replace(replace(translate(${col}, ${"šŠčČćĆžŽ"}, ${"sScCcCzZ"}), 'đ', 'dj'), 'Đ', 'dj'))`;
+}
 function buildCustomerSearch(q: string) {
   const tokens = q.split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return undefined;
   return and(
-    ...tokens.map((t) =>
-      or(
-        ilike(customers.firstName, `%${t}%`),
-        ilike(customers.lastName, `%${t}%`),
-        ilike(customers.phone, `%${t}%`),
-        ilike(customers.email, `%${t}%`)
-      )!
-    )
+    ...tokens.map((t) => {
+      const like = `%${foldSr(t)}%`;
+      const digits = t.replace(/[^0-9]/g, "");
+      const parts = [
+        sql`${foldColSql(customers.firstName)} LIKE ${like}`,
+        sql`${foldColSql(customers.lastName)} LIKE ${like}`,
+        sql`lower(${customers.email}) LIKE ${`%${t.toLowerCase()}%`}`,
+      ];
+      if (digits.length >= 2) {
+        parts.push(sql`regexp_replace(${customers.phone}, '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`);
+      }
+      return or(...parts)!;
+    })
   );
 }
 
