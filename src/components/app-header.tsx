@@ -9,7 +9,7 @@ export function AppHeader({ notifData, userName, onMenuClick }: { notifData: Not
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials, materialReady } = notifData;
+  const { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials, materialReady, correctionsDone } = notifData;
 
   const notifications = [
     ...materialReady.map((m) => ({
@@ -19,6 +19,14 @@ export function AppHeader({ notifData, userName, onMenuClick }: { notifData: Not
       body: `${m.orderNumber} · ${m.material}`,
       sub: "Nalog čeka materijal koji je sada na stanju",
       href: `/orders/${m.id}`,
+    })),
+    ...correctionsDone.map((c) => ({
+      id: `cordone-${c.id}`,
+      type: "success" as const,
+      title: "Korekcija gotova — javi klijentu",
+      body: `${c.customerName}${c.orderNumber ? ` · ${c.orderNumber}` : ""}`,
+      sub: `${c.correctionType} — spremno za drugu probu / preuzimanje`,
+      href: `/corrections`,
     })),
     ...overdueOrders.map((o) => ({
       id: `ord-${o.id}`,

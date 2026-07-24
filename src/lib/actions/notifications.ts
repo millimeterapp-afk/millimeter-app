@@ -16,7 +16,7 @@ async function getCompanyId() {
   }
 }
 
-const empty = { overdueOrders: [], openCorrections: [], inactiveCustomers: [], lowStockMaterials: [], materialReady: [] as { id: string; orderNumber: string; material: string }[] };
+const empty = { overdueOrders: [], openCorrections: [], inactiveCustomers: [], lowStockMaterials: [], materialReady: [] as { id: string; orderNumber: string; material: string }[], correctionsDone: [] as { id: string; correctionType: string; customerName: string; orderNumber: string | null }[] };
 
 export async function getNotificationData() {
   try {
@@ -79,7 +79,25 @@ export async function getNotificationData() {
       LIMIT 15
     `)) as unknown as { id: string; orderNumber: string; material: string }[];
 
-    return { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials, materialReady };
+    // Signal "korekcija gotova" (Munro + košulje): korekcije koje su u zadnjih 14 dana
+    // prešle u "resolved" — znak radnji da javi klijentu za drugu probu / preuzimanje.
+    const correctionCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const correctionsDone = (await db.execute(sql`
+      SELECT c.id, c.correction_type AS "correctionType",
+             COALESCE(NULLIF(TRIM(cu.first_name || ' ' || cu.last_name), ''), 'Klijent') AS "customerName",
+             o.order_number AS "orderNumber"
+      FROM corrections c
+      LEFT JOIN customers cu ON cu.id = c.customer_id AND cu.company_id = c.company_id
+      LEFT JOIN orders o ON o.id = c.order_id AND o.company_id = c.company_id
+      WHERE c.company_id = ${companyId}
+        AND c.status = 'resolved'
+        AND c.resolved_at IS NOT NULL
+        AND c.resolved_at >= ${correctionCutoff}
+      ORDER BY c.resolved_at DESC
+      LIMIT 15
+    `)) as unknown as { id: string; correctionType: string; customerName: string; orderNumber: string | null }[];
+
+    return { overdueOrders, openCorrections, inactiveCustomers, lowStockMaterials, materialReady, correctionsDone };
   } catch {
     return empty;
   }
