@@ -84,6 +84,12 @@ export async function createSale(data: {
       quantity: number;
       unitPrice: number;
     }>;
+    // Sabir svih stavki istog artikla — provjera stanja mora biti nad ZBIROM, jer bi
+    // inače dvije stavke istog artikla (svaka ≤ stanja) prošle a zajedno prekoračile.
+    const qtyByInv = new Map<string, number>();
+    for (const it of data.items) {
+      if (it.inventoryItemId) qtyByInv.set(it.inventoryItemId, (qtyByInv.get(it.inventoryItemId) ?? 0) + it.quantity);
+    }
     for (const it of data.items) {
       if (it.inventoryItemId) {
         const rows = (await tx.execute(
@@ -94,8 +100,9 @@ export async function createSale(data: {
         const inv = rows[0];
         if (!inv) throw new Error(`Artikal "${it.itemName}" nije pronađen u zalihama.`);
         const available = Number(inv.quantity) - Number(inv.reserved_quantity);
-        if (available < it.quantity) {
-          throw new Error(`Nema dovoljno na stanju za "${inv.name}" (dostupno: ${Math.max(0, available)}, traženo: ${it.quantity}).`);
+        const need = qtyByInv.get(it.inventoryItemId) ?? it.quantity;
+        if (available < need) {
+          throw new Error(`Nema dovoljno na stanju za "${inv.name}" (dostupno: ${Math.max(0, available)}, traženo: ${need}).`);
         }
         // Cijena iz baze ako je postavljena; ako nije, prihvati ručni unos
         const dbPrice = inv.sale_price != null ? Number(inv.sale_price) : null;

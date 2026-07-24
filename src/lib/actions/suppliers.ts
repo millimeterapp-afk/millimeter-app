@@ -153,6 +153,9 @@ export async function createSupplierInvoice(data: {
   for (const it of data.items) {
     if (!Number.isFinite(it.quantity) || it.quantity <= 0) throw new Error("Količina stavke mora biti > 0.");
     if (!Number.isFinite(it.unitPrice) || it.unitPrice < 0) throw new Error("Cena stavke mora biti ≥ 0.");
+    if (it.materialId && it.inventoryItemId) throw new Error("Stavka ne može biti i materijal i gotov artikal.");
+    // Gotova roba se vodi u cijelim komadima — decimalna količina bi pukla pri knjiženju.
+    if (it.inventoryItemId && !Number.isInteger(it.quantity)) throw new Error("Količina gotovog artikla mora biti ceo broj.");
   }
   for (const c of data.additionalCosts) {
     if (c.amount != null && (!Number.isFinite(c.amount) || c.amount < 0)) throw new Error("Dodatni trošak mora biti ≥ 0.");

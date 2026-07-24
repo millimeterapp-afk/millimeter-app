@@ -178,6 +178,13 @@ export async function updateOrderStatus(
 
   // Sve promjene (nalog + materijal + klijent + produkcija) u jednoj transakciji
   await db.transaction(async (tx) => {
+    // Zaključaj red i provjeri status POD ključem. Bez ovoga dva taba oba pročitaju
+    // stari status van transakcije, oba prođu no-op i oba knjiže totalSpent+posjetu.
+    const locked = (await tx.execute(
+      sql`SELECT status FROM orders WHERE id = ${id} AND company_id = ${companyId} FOR UPDATE`
+    )) as unknown as { status: string }[];
+    if (!locked[0] || locked[0].status === status) return; // već obrađeno (drugi tab) — ne diraj
+
     await tx
       .update(orders)
       .set(updates)

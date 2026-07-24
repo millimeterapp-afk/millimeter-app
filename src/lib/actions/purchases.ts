@@ -379,8 +379,11 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
       } else if (wasCompleted && !nowCompleted) {
         await tx.update(purchases).set({ status: "open", updatedAt: new Date() })
           .where(and(eq(purchases.id, before.purchase_id), eq(purchases.companyId, companyId)));
-        await tx.update(customers).set({ visitCount: sql`GREATEST(visit_count - 1, 0)` })
-          .where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
+        await tx.update(customers).set({
+          visitCount: sql`GREATEST(visit_count - 1, 0)`,
+          lastVisitDate: sql`CASE WHEN visit_count - 1 <= 0 THEN NULL ELSE last_visit_date END`,
+          firstVisitDate: sql`CASE WHEN visit_count - 1 <= 0 THEN NULL ELSE first_visit_date END`,
+        }).where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
       }
     } else if (before.customer_id && !before.purchase_id) {
       // Legacy nalog bez porudžbine — posjeta na ulaz/izlaz iz "preuzeto"
@@ -391,8 +394,11 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
           firstVisitDate: sql`COALESCE(first_visit_date, ${danas})`,
         }).where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
       } else if (before.nalog_status === "preuzeto") {
-        await tx.update(customers).set({ visitCount: sql`GREATEST(visit_count - 1, 0)` })
-          .where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
+        await tx.update(customers).set({
+          visitCount: sql`GREATEST(visit_count - 1, 0)`,
+          lastVisitDate: sql`CASE WHEN visit_count - 1 <= 0 THEN NULL ELSE last_visit_date END`,
+          firstVisitDate: sql`CASE WHEN visit_count - 1 <= 0 THEN NULL ELSE first_visit_date END`,
+        }).where(and(eq(customers.id, before.customer_id), eq(customers.companyId, companyId)));
       }
     }
   });

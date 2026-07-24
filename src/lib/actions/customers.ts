@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import * as XLSX from "xlsx";
 import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders, getGoCreateOrdersSafe } from "@/lib/gocreate";
-import { applyLoyaltyTier, calcLoyaltyTier } from "@/lib/loyalty";
+import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
 
 async function getCompanyId() {
@@ -114,9 +114,19 @@ export async function mergeCustomers(keepId: string, loseIds: string[]) {
       .where(and(inArray(customers.id, allIds), eq(customers.companyId, companyId)));
     const keep = rows.find((r) => r.id === keepId);
     if (!keep || keep.deletedAt) throw new Error("Klijent koji ostaje nije pronađen.");
-    const loseRows = rows.filter((r) => losers.includes(r.id) && !r.deletedAt);
-    if (loseRows.length === 0) throw new Error("Duplikati nisu pronađeni.");
+    // Svi izabrani moraju postojati, pripadati firmi i ne biti obrisani — inače prekini
+    // cijeli merge (bez tihog djelimičnog spajanja koje bi vratilo pogrešan broj).
+    if (rows.length !== allIds.length || rows.some((r) => r.deletedAt)) {
+      throw new Error("Neki od izabranih klijenata više ne postoji ili je obrisan. Osvježi stranicu.");
+    }
+    // Determinističan redoslijed (po redoslijedu loseIds) da izbor praznih polja bude stabilan.
+    const loseRows = losers.map((id) => rows.find((r) => r.id === id)!);
     const realLosers = loseRows.map((r) => r.id);
+
+    // Aktivan set mera keep-a PRIJE premeštanja (za kanonski izbor kasnije).
+    const keepActive = (await tx.execute(sql`
+      SELECT id FROM customer_measurements WHERE customer_id = ${keepId} AND is_active = true
+      ORDER BY created_at DESC LIMIT 1`)) as unknown as { id: string }[];
 
     // 1) Prebaci sve reference. Tabele SA company_id:
     for (const lid of realLosers) {
@@ -127,6 +137,20 @@ export async function mergeCustomers(keepId: string, loseIds: string[]) {
       for (const t of ["customer_measurements", "loyalty_events"]) {
         await tx.execute(sql`UPDATE ${sql.raw(t)} SET customer_id = ${keepId} WHERE customer_id = ${lid}`);
       }
+    }
+
+    // Samo JEDAN aktivan set mera na keep-u (keep-ov ako je imao, inače najnoviji od
+    // spojenih); ostale ugasi — inače profil/novi nalog uzimaju mere nasumičnog duplikata.
+    let canonicalMeas = keepActive[0]?.id ?? null;
+    if (!canonicalMeas) {
+      const newest = (await tx.execute(sql`
+        SELECT id FROM customer_measurements WHERE customer_id = ${keepId} AND is_active = true
+        ORDER BY created_at DESC LIMIT 1`)) as unknown as { id: string }[];
+      canonicalMeas = newest[0]?.id ?? null;
+    }
+    if (canonicalMeas) {
+      await tx.execute(sql`UPDATE customer_measurements SET is_active = false
+        WHERE customer_id = ${keepId} AND is_active = true AND id <> ${canonicalMeas}`);
     }
 
     // 2) Popuni prazna polja keep-a iz duplikata; saberi novac/posjete/poene
@@ -163,7 +187,7 @@ export async function mergeCustomers(keepId: string, loseIds: string[]) {
 
   revalidatePath("/customers");
   revalidatePath("/customers/duplikati");
-  return { merged: losers.length };
+  return { merged: losers.length, ok: true };
 }
 
 // ─── Kandidati za spajanje (dva pristupa) ─────────────────────────────────────
@@ -182,8 +206,8 @@ export async function getDuplicateCandidates(): Promise<{ exactDupes: DupGroup[]
     WITH n AS (
       SELECT c.id, c.first_name, c.last_name, c.phone, c.last_visit_date, c.total_spent,
         lower(trim(c.first_name) || ' ' || trim(c.last_name)) AS k,
-        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id) AS munro,
-        (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id) AS orders
+        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id AND mo.company_id = ${companyId}) AS munro,
+        (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id AND o.company_id = ${companyId}) AS orders
       FROM customers c
       WHERE c.company_id = ${companyId} AND c.deleted_at IS NULL
         AND trim(c.first_name) <> '' AND trim(c.last_name) <> ''
@@ -209,14 +233,14 @@ export async function getDuplicateCandidates(): Promise<{ exactDupes: DupGroup[]
   const variantRows = (await db.execute(sql`
     WITH np AS (
       SELECT c.id, c.first_name, c.last_name, lower(trim(c.last_name)) AS ln, left(lower(trim(c.first_name)),1) AS fi,
-        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id) AS munro
+        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id AND mo.company_id = ${companyId}) AS munro
       FROM customers c
       WHERE c.company_id = ${companyId} AND c.deleted_at IS NULL
         AND NULLIF(trim(c.phone),'') IS NULL AND trim(c.last_name) <> '' AND trim(c.first_name) <> ''
     ), wp AS (
       SELECT c.id, c.first_name, c.last_name, c.phone, lower(trim(c.last_name)) AS ln, left(lower(trim(c.first_name)),1) AS fi,
         c.last_visit_date, c.total_spent,
-        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id) AS munro
+        (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id AND mo.company_id = ${companyId}) AS munro
       FROM customers c
       WHERE c.company_id = ${companyId} AND c.deleted_at IS NULL
         AND NULLIF(trim(c.phone),'') IS NOT NULL AND trim(c.last_name) <> '' AND trim(c.first_name) <> ''
@@ -330,19 +354,23 @@ export async function getCustomer(id: string) {
 // ─── Top klijenti po Munro potrošnji za godinu (Nikolin zahtjev) ──────────────
 export async function getTopMunroByYear(year: number) {
   const companyId = await getCompanyId();
-  const rows = await db
-    .select({
-      customerId: munroOrders.customerId,
-      customerName: munroOrders.customerName,
-      orders: sql<number>`count(*)`,
-      totalEur: sql<number>`sum(price)`,
-    })
-    .from(munroOrders)
-    .where(and(eq(munroOrders.companyId, companyId), eq(munroOrders.orderYear, year)))
-    .groupBy(munroOrders.customerId, munroOrders.customerName)
-    .orderBy(sql`sum(price) desc`)
-    .limit(20);
-  return rows.map((r) => ({ ...r, orders: Number(r.orders), totalEur: Number(r.totalEur) }));
+  // Povezani nalozi se grupišu po customer_id, a ime se uzima iz tabele klijenata —
+  // pa spojeni klijent (npr. Eki/Elvir) ostaje JEDAN red, ne dva sa podijeljenom
+  // potrošnjom. customer_name se koristi samo za nepovezane Munro naloge.
+  const rows = (await db.execute(sql`
+    SELECT
+      mo.customer_id AS "customerId",
+      COALESCE(NULLIF(TRIM(c.first_name || ' ' || c.last_name), ''), mo.customer_name) AS "customerName",
+      count(*)::int AS orders,
+      sum(mo.price)::float8 AS "totalEur"
+    FROM munro_orders mo
+    LEFT JOIN customers c ON c.id = mo.customer_id AND c.company_id = mo.company_id AND c.deleted_at IS NULL
+    WHERE mo.company_id = ${companyId} AND mo.order_year = ${year}
+    GROUP BY mo.customer_id, COALESCE(NULLIF(TRIM(c.first_name || ' ' || c.last_name), ''), mo.customer_name)
+    ORDER BY sum(mo.price) DESC
+    LIMIT 20
+  `)) as unknown as { customerId: string | null; customerName: string; orders: number; totalEur: number }[];
+  return rows.map((r) => ({ customerId: r.customerId, customerName: r.customerName, orders: Number(r.orders), totalEur: Number(r.totalEur) }));
 }
 
 // Godine za koje imamo Munro istoriju (za dropdown)
@@ -504,69 +532,56 @@ export async function addHistoricalPurchase(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Nisi prijavljen");
-
   const companyId = await getCompanyId();
 
-  // Generiši retroaktivni broj naloga
-  const result = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(orders)
-    .where(eq(orders.companyId, companyId));
-  const count = Number(result[0].count) + 1;
-  const year = new Date(data.deliveredAt).getFullYear();
-  const orderNumber = `RET-${year}-${String(count).padStart(4, "0")}`;
+  if (!data.item?.trim()) throw new Error("Artikal je obavezan.");
+  if (!Number.isFinite(data.totalAmount) || data.totalAmount < 0) throw new Error("Iznos mora biti broj ≥ 0.");
+  const dts = new Date(data.deliveredAt);
+  if (isNaN(dts.getTime())) throw new Error("Datum nije ispravan.");
 
-  await db.insert(orders).values({
-    companyId,
-    orderNumber,
-    customerId,
-    orderType: "custom",
-    orderKind: "domaca",
-    status: "delivered",
-    nalogStatus: "preuzeto",
-    createdBy: user.id,
-    dueDate: data.deliveredAt,
-    deliveredAt: new Date(data.deliveredAt),
-    completedAt: new Date(data.deliveredAt),
-    totalAmount: String(data.totalAmount),
-    paidAmount: String(data.totalAmount),
-    paymentStatus: "paid",
-    item: data.item,
-    notes: data.notes || null,
+  await db.transaction(async (tx) => {
+    // Klijent MORA pripadati firmi i ne smije biti obrisan; zaključan (FOR KEY SHARE)
+    // da ga paralelni merge ne soft-obriše dok pravimo nalog na njemu. Bez ove provjere
+    // moglo se ubaciti nalog sa customer_id druge firme (cross-tenant) ili obrisanog.
+    const custRows = (await tx.execute(sql`
+      SELECT first_visit_date, last_visit_date FROM customers
+      WHERE id = ${customerId} AND company_id = ${companyId} AND deleted_at IS NULL
+      FOR KEY SHARE`)) as unknown as { first_visit_date: string | null; last_visit_date: string | null }[];
+    const cust = custRows[0];
+    if (!cust) throw new Error("Klijent nije pronađen.");
+
+    const cnt = (await tx.execute(sql`SELECT count(*)::int AS c FROM orders WHERE company_id = ${companyId}`)) as unknown as { c: number }[];
+    const orderNumber = `RET-${dts.getFullYear()}-${String(Number(cnt[0].c) + 1).padStart(4, "0")}`;
+
+    await tx.insert(orders).values({
+      companyId, orderNumber, customerId,
+      orderType: "custom", orderKind: "domaca",
+      status: "delivered", nalogStatus: "preuzeto",
+      createdBy: user.id,
+      dueDate: data.deliveredAt,
+      deliveredAt: dts, completedAt: dts,
+      totalAmount: String(data.totalAmount),
+      paidAmount: String(data.totalAmount),
+      paymentStatus: "paid",
+      item: data.item.trim(), notes: data.notes || null,
+    });
+
+    const updateData: Record<string, unknown> = {
+      totalSpent: sql`total_spent + ${data.totalAmount}`,
+      visitCount: sql`visit_count + 1`,
+      updatedAt: new Date(),
+    };
+    if (!cust.last_visit_date || data.deliveredAt > cust.last_visit_date) updateData.lastVisitDate = data.deliveredAt;
+    if (!cust.first_visit_date || data.deliveredAt < cust.first_visit_date) updateData.firstVisitDate = data.deliveredAt;
+
+    const [updated] = await tx.update(customers).set(updateData)
+      .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)))
+      .returning({ totalSpent: customers.totalSpent });
+    if (updated) {
+      await tx.update(customers).set({ loyaltyTier: calcLoyaltyTier(Number(updated.totalSpent)) })
+        .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
+    }
   });
-
-  // Dohvati klijenta da proverim datume
-  const existingCustomer = await db.query.customers.findFirst({
-    where: (c, { eq }) => eq(c.id, customerId),
-  });
-
-  const updateData: Record<string, unknown> = {
-    totalSpent: sql`total_spent + ${data.totalAmount}`,
-    visitCount: sql`visit_count + 1`,
-    updatedAt: new Date(),
-  };
-
-  // Ažuriraj lastVisitDate samo ako je nova kupovina novija
-  if (!existingCustomer?.lastVisitDate || data.deliveredAt > existingCustomer.lastVisitDate) {
-    updateData.lastVisitDate = data.deliveredAt;
-  }
-  // Ažuriraj firstVisitDate samo ako je nova kupovina starija
-  if (!existingCustomer?.firstVisitDate || data.deliveredAt < existingCustomer.firstVisitDate) {
-    updateData.firstVisitDate = data.deliveredAt;
-  }
-
-  // Ažuriraj statistiku klijenta
-  await db
-    .update(customers)
-    .set(updateData)
-    .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
-
-  const updated = await db.query.customers.findFirst({
-    where: (c, { eq, and }) => and(eq(c.id, customerId), eq(c.companyId, companyId)),
-  });
-  if (updated) {
-    await applyLoyaltyTier(customerId, Number(updated.totalSpent), companyId);
-  }
 
   revalidatePath(`/customers/${customerId}`);
 }
