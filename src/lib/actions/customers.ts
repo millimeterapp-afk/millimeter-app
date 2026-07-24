@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { customers, customerMeasurements, orders, munroOrders } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { eq, desc, ilike, or, isNull, and, sql, inArray, type AnyColumn } from "drizzle-orm";
+import { eq, desc, ilike, or, isNull, and, sql, inArray, type AnyColumn, type SQL } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import * as XLSX from "xlsx";
@@ -383,6 +383,29 @@ export async function getMunroYears() {
     .groupBy(munroOrders.orderYear)
     .orderBy(desc(munroOrders.orderYear));
   return rows.map((r) => r.year).filter((y): y is number => y != null);
+}
+
+// Provjera duplikata PRIJE unosa — vraća slične klijente (isto ime bez obzira na
+// dijakritiku, ILI isti broj telefona po ciframa). NE blokira (moguć imenjak ili
+// porodica na istom broju), samo daje formi da upozori i pita „svejedno dodaj?".
+export async function findSimilarCustomers(input: { firstName: string; lastName: string; phone?: string }) {
+  const companyId = await getCompanyId();
+  const fFirst = foldSr((input.firstName || "").trim());
+  const fLast = foldSr((input.lastName || "").trim());
+  const digits = (input.phone || "").replace(/[^0-9]/g, "");
+  const conds: SQL[] = [];
+  if (fFirst && fLast) {
+    conds.push(sql`(${foldColSql(customers.firstName)} = ${fFirst} AND ${foldColSql(customers.lastName)} = ${fLast})`);
+  }
+  if (digits.length >= 5) {
+    conds.push(sql`regexp_replace(${customers.phone}, '[^0-9]', '', 'g') = ${digits}`);
+  }
+  if (conds.length === 0) return [];
+  return db.select({ id: customers.id, firstName: customers.firstName, lastName: customers.lastName, phone: customers.phone })
+    .from(customers)
+    .where(and(eq(customers.companyId, companyId), isNull(customers.deletedAt), or(...conds)!))
+    .orderBy(customers.lastName, customers.firstName)
+    .limit(6);
 }
 
 export async function createCustomer(data: {

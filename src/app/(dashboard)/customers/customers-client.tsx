@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createCustomer, importCustomers, generateCustomerTemplate } from "@/lib/actions/customers";
+import { createCustomer, importCustomers, generateCustomerTemplate, findSimilarCustomers } from "@/lib/actions/customers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, X, Upload, Download, Merge, PhoneOff } from "lucide-react";
@@ -48,7 +48,11 @@ export function CustomersClient({
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [importResult, setImportResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [similar, setSimilar] = useState<Array<{ id: string; firstName: string; lastName: string; phone: string }>>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const openNewForm = () => { setForm(emptyForm); setSimilar([]); setError(""); setShowForm(true); };
+  const closeForm = () => { setShowForm(false); setSimilar([]); setError(""); };
 
   const filterSuffix = noPhone ? "&noPhone=1" : "";
 
@@ -72,6 +76,12 @@ export function CustomersClient({
     setError("");
     startTransition(async () => {
       try {
+        // Provjeri duplikate prije unosa; ako ih ima, upozori i traži potvrdu (jedan
+        // klik više). Ako je lista već prikazana (potvrdio je), preskoči i unesi.
+        if (similar.length === 0) {
+          const found = await findSimilarCustomers({ firstName: form.firstName, lastName: form.lastName, phone: form.phone });
+          if (found.length > 0) { setSimilar(found); return; }
+        }
         await createCustomer({
           firstName: form.firstName,
           lastName: form.lastName,
@@ -85,6 +95,7 @@ export function CustomersClient({
         });
         setShowForm(false);
         setForm(emptyForm);
+        setSimilar([]);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Greška pri dodavanju klijenta.");
@@ -144,7 +155,7 @@ export function CustomersClient({
             <Upload className="w-4 h-4" /> {isPending ? "Uvoz..." : "Uvezi Excel"}
             <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleImport} />
           </label>
-          <button onClick={() => setShowForm(true)}
+          <button onClick={openNewForm}
             className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
             <Plus className="w-4 h-4" /> Novi klijent
           </button>
@@ -176,22 +187,22 @@ export function CustomersClient({
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b">
               <h2 className="text-lg font-semibold">Novi klijent</h2>
-              <button onClick={() => setShowForm(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
+              <button onClick={closeForm}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
             <form onSubmit={handleAdd} className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Ime *</label>
-                  <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required className="mt-1" placeholder="Marko" />
+                  <Input value={form.firstName} onChange={(e) => { setForm({ ...form, firstName: e.target.value }); setSimilar([]); }} required className="mt-1" placeholder="Marko" />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Prezime *</label>
-                  <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required className="mt-1" placeholder="Petrović" />
+                  <Input value={form.lastName} onChange={(e) => { setForm({ ...form, lastName: e.target.value }); setSimilar([]); }} required className="mt-1" placeholder="Petrović" />
                 </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Telefon *</label>
-                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required className="mt-1" placeholder="+382 67 123 456" />
+                <Input value={form.phone} onChange={(e) => { setForm({ ...form, phone: e.target.value }); setSimilar([]); }} required className="mt-1" placeholder="+382 67 123 456" />
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Email</label>
@@ -217,13 +228,28 @@ export function CustomersClient({
                   ))}
                 </div>
               </div>
+              {similar.length > 0 && (
+                <div className="text-sm bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  <p className="font-medium text-amber-800 mb-1">Već postoji sličan klijent:</p>
+                  <ul className="space-y-0.5">
+                    {similar.map((s) => (
+                      <li key={s.id}>
+                        <Link href={`/customers/${s.id}`} target="_blank" className="text-amber-900 underline decoration-amber-300 hover:decoration-amber-600">
+                          {s.firstName} {s.lastName} · {s.phone?.trim() || "bez broja"}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-amber-700 text-xs mt-1">Ako je isti čovek, otvori njega. Ako je stvarno nova osoba, klikni Svejedno dodaj.</p>
+                </div>
+              )}
               {error && (
                 <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>
               )}
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="flex-1 border rounded-md py-2 text-sm hover:bg-muted">Otkaži</button>
-                <button type="submit" disabled={isPending} className="flex-1 bg-black text-white rounded-md py-2 text-sm hover:bg-black/80 disabled:opacity-50">
-                  {isPending ? "Čuvanje..." : "Sačuvaj klijenta"}
+                <button type="button" onClick={closeForm} className="flex-1 border rounded-md py-2 text-sm hover:bg-muted">Otkaži</button>
+                <button type="submit" disabled={isPending} className={`flex-1 rounded-md py-2 text-sm disabled:opacity-50 ${similar.length > 0 ? "bg-amber-600 text-white hover:bg-amber-700" : "bg-black text-white hover:bg-black/80"}`}>
+                  {isPending ? "Provera..." : (similar.length > 0 ? "Svejedno dodaj" : "Sačuvaj klijenta")}
                 </button>
               </div>
             </form>
