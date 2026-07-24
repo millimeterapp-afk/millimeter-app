@@ -32,6 +32,10 @@ function foldSr(s: string): string {
 function foldColSql(col: AnyColumn) {
   return sql`lower(replace(replace(translate(${col}, ${"šŠčČćĆžŽ"}, ${"sScCcCzZ"}), 'đ', 'dj'), 'Đ', 'dj'))`;
 }
+// Isto presavijanje, ali za proizvoljan SQL izraz (za dedup grupisanje po imenu) —
+// bezbjedno za sql.raw jer sadrži samo imena kolona i literalne konstante.
+const foldExpr = (inner: string) =>
+  `lower(replace(replace(translate(${inner}, 'šŠčČćĆžŽ', 'sScCcCzZ'), 'đ', 'dj'), 'Đ', 'dj'))`;
 function buildCustomerSearch(q: string) {
   const tokens = q.split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return undefined;
@@ -205,7 +209,7 @@ export async function getDuplicateCandidates(): Promise<{ exactDupes: DupGroup[]
   const exactRows = (await db.execute(sql`
     WITH n AS (
       SELECT c.id, c.first_name, c.last_name, c.phone, c.last_visit_date, c.total_spent,
-        lower(trim(c.first_name) || ' ' || trim(c.last_name)) AS k,
+        ${sql.raw(foldExpr("trim(c.first_name) || ' ' || trim(c.last_name)"))} AS k,
         (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id AND mo.company_id = ${companyId}) AS munro,
         (SELECT count(*)::int FROM orders o WHERE o.customer_id = c.id AND o.company_id = ${companyId}) AS orders
       FROM customers c
@@ -232,13 +236,13 @@ export async function getDuplicateCandidates(): Promise<{ exactDupes: DupGroup[]
   //    (hvata "Eki/Elvir" varijantu imena koju exact-match ne vidi)
   const variantRows = (await db.execute(sql`
     WITH np AS (
-      SELECT c.id, c.first_name, c.last_name, lower(trim(c.last_name)) AS ln, left(lower(trim(c.first_name)),1) AS fi,
+      SELECT c.id, c.first_name, c.last_name, ${sql.raw(foldExpr("trim(c.last_name)"))} AS ln, left(${sql.raw(foldExpr("trim(c.first_name)"))}, 1) AS fi,
         (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id AND mo.company_id = ${companyId}) AS munro
       FROM customers c
       WHERE c.company_id = ${companyId} AND c.deleted_at IS NULL
         AND NULLIF(trim(c.phone),'') IS NULL AND trim(c.last_name) <> '' AND trim(c.first_name) <> ''
     ), wp AS (
-      SELECT c.id, c.first_name, c.last_name, c.phone, lower(trim(c.last_name)) AS ln, left(lower(trim(c.first_name)),1) AS fi,
+      SELECT c.id, c.first_name, c.last_name, c.phone, ${sql.raw(foldExpr("trim(c.last_name)"))} AS ln, left(${sql.raw(foldExpr("trim(c.first_name)"))}, 1) AS fi,
         c.last_visit_date, c.total_spent,
         (SELECT count(*)::int FROM munro_orders mo WHERE mo.customer_id = c.id AND mo.company_id = ${companyId}) AS munro
       FROM customers c
