@@ -178,12 +178,21 @@ export async function updateOrderStatus(
 
   // Sve promjene (nalog + materijal + klijent + produkcija) u jednoj transakciji
   await db.transaction(async (tx) => {
-    // Zaključaj red i provjeri status POD ključem. Bez ovoga dva taba oba pročitaju
-    // stari status van transakcije, oba prođu no-op i oba knjiže totalSpent+posjetu.
-    const locked = (await tx.execute(
-      sql`SELECT status FROM orders WHERE id = ${id} AND company_id = ${companyId} FOR UPDATE`
-    )) as unknown as { status: string }[];
-    if (!locked[0] || locked[0].status === status) return; // već obrađeno (drugi tab) — ne diraj
+    // Zaključaj red i učitaj SVA polja koja koristimo POD ključem. Pred-transakcijski
+    // `order` je mogao zastarjeti (paralelni merge prebaci customer_id, ili izmjena iznosa),
+    // pa se svi efekti računaju isključivo iz zaključanog reda.
+    const lockedRows = (await tx.execute(sql`
+      SELECT status, customer_id, total_amount, material, due_date, notes, purchase_id
+      FROM orders WHERE id = ${id} AND company_id = ${companyId} FOR UPDATE
+    `)) as unknown as {
+      status: string; customer_id: string | null; total_amount: string | null;
+      material: string | null; due_date: string | null; notes: string | null; purchase_id: string | null;
+    }[];
+    const L = lockedRows[0];
+    if (!L) return;
+    if (L.purchase_id) throw new Error("Ovaj nalog pripada porudžbini — koristi 'Fazu izrade', ne stari tok.");
+    if (L.status === status) return; // već u tom statusu (drugi tab) — ne diraj
+    if (L.status === "delivered") throw new Error("Isporučen nalog se ne može mijenjati."); // spriječi otkazivanje/vraćanje već knjiženog
 
     await tx
       .update(orders)
@@ -216,32 +225,31 @@ export async function updateOrderStatus(
       }
     }
 
-    // Kad je isporučen — ažuriraj totalSpent i visitCount na klijentu
-    // (order je već učitan i provjereno pripada firmi; prelaz je uvijek !delivered→delivered)
-    if (status === "delivered" && order.customerId) {
+    // Kad je isporučen — ažuriraj totalSpent i visitCount na klijentu (iz zaključanog reda)
+    if (status === "delivered" && L.customer_id) {
       const [updated] = await tx
         .update(customers)
         .set({
-          totalSpent: sql`total_spent + ${Number(order.totalAmount)}`,
+          totalSpent: sql`total_spent + ${Number(L.total_amount)}`,
           visitCount: sql`visit_count + 1`,
           lastVisitDate: belgradeToday(),
           updatedAt: new Date(),
         })
-        .where(and(eq(customers.id, order.customerId), eq(customers.companyId, companyId)))
+        .where(and(eq(customers.id, L.customer_id), eq(customers.companyId, companyId)))
         .returning({ totalSpent: customers.totalSpent });
 
       if (updated) {
         await tx.update(customers)
           .set({ loyaltyTier: calcLoyaltyTier(Number(updated.totalSpent)) })
-          .where(and(eq(customers.id, order.customerId), eq(customers.companyId, companyId)));
+          .where(and(eq(customers.id, L.customer_id), eq(customers.companyId, companyId)));
       }
     }
 
-    // Rezerviši materijal kad nalog postane potvrđen
-    if (status === "confirmed" && order.material) {
+    // Rezerviši materijal kad nalog postane potvrđen (iz zaključanog reda)
+    if (status === "confirmed" && L.material) {
       const mat = await tx.query.materials.findFirst({
         where: (m, { eq, and }) =>
-          and(eq(m.name, order.material!), eq(m.companyId, companyId)),
+          and(eq(m.name, L.material!), eq(m.companyId, companyId)),
       });
       if (mat) {
         const existing = await tx.query.materialReservations.findFirst({
@@ -276,8 +284,8 @@ export async function updateOrderStatus(
           orderId: id,
           status: "queued",
           priority: "medium",
-          dueDate: order.dueDate || null,
-          notesFromStore: order.notes || null,
+          dueDate: L.due_date || null,
+          notesFromStore: L.notes || null,
         });
       }
     }

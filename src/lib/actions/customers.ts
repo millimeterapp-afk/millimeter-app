@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { customers, customerMeasurements, orders, munroOrders } from "@/lib/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { eq, desc, ilike, or, isNull, and, sql, inArray, type AnyColumn, type SQL } from "drizzle-orm";
+import { eq, ne, desc, ilike, or, isNull, and, sql, inArray, type AnyColumn, type SQL } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import * as XLSX from "xlsx";
@@ -36,20 +36,32 @@ function foldColSql(col: AnyColumn) {
 // bezbjedno za sql.raw jer sadrži samo imena kolona i literalne konstante.
 const foldExpr = (inner: string) =>
   `lower(replace(replace(translate(${inner}, 'šŠčČćĆžŽ', 'sScCcCzZ'), 'đ', 'dj'), 'Đ', 'dj'))`;
+
+// Normalizacija telefona na lokalni oblik: skini sve osim cifara, vodeće "00", i pozivni
+// broj 381/382 pretvori u vodeću "0" — pa "+382 67 123 456" == "067 123 456". ISTO u JS i SQL.
+function phoneDigits(raw: string): string {
+  let d = (raw || "").replace(/[^0-9]/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (/^38[12]/.test(d)) d = "0" + d.slice(3);
+  return d;
+}
+function phoneColNorm(col: AnyColumn) {
+  return sql`regexp_replace(regexp_replace(regexp_replace(${col}, '[^0-9]', '', 'g'), '^00', ''), '^38[12]', '0')`;
+}
 function buildCustomerSearch(q: string) {
   const tokens = q.split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return undefined;
   return and(
     ...tokens.map((t) => {
       const like = `%${foldSr(t)}%`;
-      const digits = t.replace(/[^0-9]/g, "");
+      const digits = phoneDigits(t);
       const parts = [
         sql`${foldColSql(customers.firstName)} LIKE ${like}`,
         sql`${foldColSql(customers.lastName)} LIKE ${like}`,
         sql`lower(${customers.email}) LIKE ${`%${t.toLowerCase()}%`}`,
       ];
       if (digits.length >= 2) {
-        parts.push(sql`regexp_replace(${customers.phone}, '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`);
+        parts.push(sql`${phoneColNorm(customers.phone)} LIKE ${`%${digits}%`}`);
       }
       return or(...parts)!;
     })
@@ -127,35 +139,35 @@ export async function mergeCustomers(keepId: string, loseIds: string[]) {
     const loseRows = losers.map((id) => rows.find((r) => r.id === id)!);
     const realLosers = loseRows.map((r) => r.id);
 
-    // Aktivan set mera keep-a PRIJE premeštanja (za kanonski izbor kasnije).
-    const keepActive = (await tx.execute(sql`
-      SELECT id FROM customer_measurements WHERE customer_id = ${keepId} AND is_active = true
-      ORDER BY created_at DESC LIMIT 1`)) as unknown as { id: string }[];
-
     // 1) Prebaci sve reference. Tabele SA company_id:
     for (const lid of realLosers) {
       for (const t of ["purchases", "orders", "munro_orders", "corrections", "sales", "payments", "appointments"]) {
         await tx.execute(sql`UPDATE ${sql.raw(t)} SET customer_id = ${keepId} WHERE customer_id = ${lid} AND company_id = ${companyId}`);
       }
-      // Tabele BEZ company_id (lid je već potvrđen da pripada firmi):
-      for (const t of ["customer_measurements", "loyalty_events"]) {
-        await tx.execute(sql`UPDATE ${sql.raw(t)} SET customer_id = ${keepId} WHERE customer_id = ${lid}`);
-      }
+      // loyalty_events nema company_id (lid je već potvrđen da pripada firmi):
+      await tx.execute(sql`UPDATE loyalty_events SET customer_id = ${keepId} WHERE customer_id = ${lid}`);
     }
 
-    // Samo JEDAN aktivan set mera na keep-u (keep-ov ako je imao, inače najnoviji od
-    // spojenih); ostale ugasi — inače profil/novi nalog uzimaju mere nasumičnog duplikata.
+    // customer_measurements — samo JEDAN aktivan set na keep-u, i redoslijed BEZBJEDAN za
+    // budući partial-unique indeks (UNIQUE(customer_id) WHERE is_active): prvo odaberi
+    // kanonski, ugasi ostale AKTIVNE dok još imaju stari customer_id, pa TEK ONDA prebaci.
+    const keepActive = await tx.select({ id: customerMeasurements.id }).from(customerMeasurements)
+      .where(and(eq(customerMeasurements.customerId, keepId), eq(customerMeasurements.isActive, true)))
+      .orderBy(desc(customerMeasurements.createdAt)).limit(1);
     let canonicalMeas = keepActive[0]?.id ?? null;
     if (!canonicalMeas) {
-      const newest = (await tx.execute(sql`
-        SELECT id FROM customer_measurements WHERE customer_id = ${keepId} AND is_active = true
-        ORDER BY created_at DESC LIMIT 1`)) as unknown as { id: string }[];
-      canonicalMeas = newest[0]?.id ?? null;
+      const loserActive = await tx.select({ id: customerMeasurements.id }).from(customerMeasurements)
+        .where(and(inArray(customerMeasurements.customerId, realLosers), eq(customerMeasurements.isActive, true)))
+        .orderBy(desc(customerMeasurements.createdAt)).limit(1);
+      canonicalMeas = loserActive[0]?.id ?? null;
     }
     if (canonicalMeas) {
-      await tx.execute(sql`UPDATE customer_measurements SET is_active = false
-        WHERE customer_id = ${keepId} AND is_active = true AND id <> ${canonicalMeas}`);
+      await tx.update(customerMeasurements).set({ isActive: false })
+        .where(and(inArray(customerMeasurements.customerId, [keepId, ...realLosers]),
+          eq(customerMeasurements.isActive, true), ne(customerMeasurements.id, canonicalMeas)));
     }
+    await tx.update(customerMeasurements).set({ customerId: keepId })
+      .where(inArray(customerMeasurements.customerId, realLosers));
 
     // 2) Popuni prazna polja keep-a iz duplikata; saberi novac/posjete/poene
     const pick = <T,>(cur: T, alts: T[]): T => (nonEmpty(cur) ? cur : (alts.find(nonEmpty) ?? cur));
@@ -396,13 +408,13 @@ export async function findSimilarCustomers(input: { firstName: string; lastName:
   const companyId = await getCompanyId();
   const fFirst = foldSr((input.firstName || "").trim());
   const fLast = foldSr((input.lastName || "").trim());
-  const digits = (input.phone || "").replace(/[^0-9]/g, "");
+  const digits = phoneDigits(input.phone || "");
   const conds: SQL[] = [];
   if (fFirst && fLast) {
     conds.push(sql`(${foldColSql(customers.firstName)} = ${fFirst} AND ${foldColSql(customers.lastName)} = ${fLast})`);
   }
   if (digits.length >= 5) {
-    conds.push(sql`regexp_replace(${customers.phone}, '[^0-9]', '', 'g') = ${digits}`);
+    conds.push(sql`${phoneColNorm(customers.phone)} = ${digits}`);
   }
   if (conds.length === 0) return [];
   return db.select({ id: customers.id, firstName: customers.firstName, lastName: customers.lastName, phone: customers.phone })

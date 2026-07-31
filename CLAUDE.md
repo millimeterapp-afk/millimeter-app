@@ -885,4 +885,43 @@ Loyalty pragovi IZBAČENI iz mejla (Matejeva odluka — kasnije, kad app uđe u 
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-18 (uveče)*
+## 27. Sesija 20–25.7.2026 — odgovori klijenata, Codex round 2/3, dedup alat, poboljšanja
+
+### Odgovori klijenata (18–25.7)
+- **Nikola:** „Admin = Octopos kasa". Izvoz moguć „grupu po grupu"; u njihovom sistemu raspoređeno po **BRENDOVIMA** (ne Munro/proizvodnja/gotove). Ide preko **Jovane** (Aleksandar je pita; Matej nema njen kontakt). Traži izvoz sa **nabavnom I prodajnom cenom**, imenom povezano sa Munrom (npr. „Odelo PC11" → nabavna X, prodajna Y), uz **sinonime** — jer se šifre NE poklapaju (Munro kodira E0049/CE017/SH00014; provereno da „PC11" ne postoji u Munro fabric šiframa).
+- **Aleksandar:** nazivi faza POTVRĐENI (moj „Za izradu" prihvaćen kao logičniji); signal OK; gotov proizvod = prost nalog, **bez statusa „naruceno" za sad** (od partnera naručuju retko). Poslao **Munro tok Word** (`Desktop/Munro narucivanje - proces.docx`) + ranije **spec naloga za košulju** (`Desktop/Nalog za kosulje.docx`). Pravi katalog opcija (5 krojeva: 3 muška + 2 ženska, kragne, manžetne, monogram) SA proizvodnjom — NIJE gotov. Radi na spisku klijenata (brojevi + dedup) i komentarima po modulima. Mobilni pukao. **Na moru 26.7 → nazad 2.8.**
+
+### Munro tok (iz Worda) — mapiranje
+Nalog se pravi u MUNRO appu; naš app vodi shop-side tok (termin → merenje+avans 50% → odelo stiglo → proba → [korekcija u proizvodnji] → druga proba → preuzeto) i povlači datum dostave+status iz GoCreate (već radi). NOVO: signal „korekcija gotova" (✅ urađeno), istorijat korekcija vezan za odeću, update fit-profila posle korekcije. Munro korekcija = ista kao za košulje → deli pod-proces.
+
+### Urađeno i deployovano (commitovi)
+- **1a7cbc3** Codex round-2 (PostgREST REVOKE, totalSpent iz uplata, FOR UPDATE lock-ovi, transakcije) + alat **„Mogući duplikati"** (`/customers/duplikati`: merge klijenata + kandidati isto ime/različit broj i Eki/Elvir po prezimenu, filter „bez broja").
+- **95f1fda** Pretraga **bez dijakritike** (`foldSr`/`foldColSql`: š/č/ć/ž→s/c/c/z, đ→dj, ISTO u JS i SQL) + telefon po ciframa. Dokazano Node testom (stara logika 0/4698 → nova 4698/4698).
+- **c10357a** Codex round-3: HIGH (merge ostavlja jedan aktivan set mera; `addHistoricalPurchase` transakcija+FOR KEY SHARE tenant; `updateOrderStatus` lock+recheck); MED (merge-abort ako svi nisu validni, `getTopMunroByYear` po customer_id, `createSale` sabir istog artikla, faktura int/odbij oba-ID); LOW (dedup tenant-scope, det. izbor polja, reopen čisti datume).
+- **dc83700** Sprečavanje duplikata na unosu (`findSimilarCustomers` + upozorenje „Svejedno dodaj"; ne blokira zbog imenjaka/porodice).
+- **3be6a9a** Dedup alat presavija dijakritiku (`foldExpr`, poravnat sa pretragom).
+- **33581cd** Signal **„korekcija gotova"** (zvono: korekcija `resolved` u zadnjih 14 dana → „javi klijentu"; UI već ima „Rešeno" koje postavlja `resolvedAt`).
+
+### Komunikacija sa klijentom — REGISTAR (VAŽNO)
+- **Nikola = profesionalno, persiranje (Vi).** **Aleksandar = drugarski, „ti".** Oba **EKAVICA, BEZ dijakritike** (š/č/ć/ž/đ), **BEZ AI tona** (bez crtica/em-dash, bez bulleta, prirodan tekst koji teče). **Nikola UVEK CC** na mejlovima. Matej se predstavlja u prvom licu (ja sam radio). Svaka tvrdnja ide uz proveru (kod/baza) pre slanja.
+
+### Blokirano / čeka (stanje 25.7)
+1. **2 SQL migracije** (`UNIQUE(company_id, sale_number)` + sekvenca; partial-unique „jedan aktivan set mera po klijentu") — čeka **Supabase MCP konektor** (trenutno pao). Raw SQL, NIKAD drizzle-kit push.
+2. **Octopos izvoz** (nabavna+prodajna) preko Jovane → uvoz + sinonimi Munro↔Octopos.
+3. **Katalog opcija za košulje** (Aleksandar + proizvodnja).
+4. **Munro tok build** (istorijat korekcija vezan za odeću, fit-profil update) + **nalog za košulju** — najbolje kad se Aleksandar vrati (2.8).
+5. **Role/nalozi po radniku** — Aleksandar + Nikola dogovaraju.
+- Deferred ideje: uprošćen ekran za proizvodnju (koleginice), merge audit-log, signal materijala preko FK umesto imena, obaveštenje klijentu (SMS/mejl kad je gotovo).
+
+### Go-live gate (nepromenjeno)
+repo→Private, Supabase Pro (pred prvi radni dan), Nikolina lozinka, `app.millimeter.rs`, ponovni Codex prolaz posle svega.
+
+### Komunikacija — stanje 27.7
+- **Nikola:** pročitao poruku o poboljšanjima („odgovaram kasnije"). Pričao sa Aleksandrom u čet — **generalno zadovoljan kako ide app**. **Vratio se s odmora, u Beogradu, DOSTUPAN.** Dok je Aleksandar odsutan, sve što treba tražiti PRVO od Nikole.
+- **Aleksandar:** na moru, **vraća se u utorak (~4.8)**. Mobilni pukao — retko na WhatsApp, ulazi preko laptopa. Kad se vrati „nastavljamo po redu gde smo stali".
+- **Octopos kontakt: Aleksandar rekao „Jovana", Matej kaže „Nataša" — PROVERITI tačno ime.** Osoba koja radi Octopos izvoz. Pošto je Aleksandar odsutan, izvoz se traži **preko Nikole**.
+- **Supabase MCP konektor VRAĆEN (27.7)** → 2 zaostale SQL migracije (UNIQUE sale_number, partial-unique aktivne mere) mogu da se odrade.
+
+---
+
+*CLAUDE.md ažuriran: 2026-07-27*
