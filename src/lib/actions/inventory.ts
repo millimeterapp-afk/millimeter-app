@@ -142,6 +142,16 @@ export async function searchInventoryLite(query: string) {
     .limit(30);
 }
 
+// Agregati za /inventory kartice (ukupan broj + vrijednost) — bez učitavanja svih
+export async function getInventoryStats() {
+  const { dbUser } = await getCurrentUser();
+  const [r] = await db.select({
+    count: sql<number>`count(*)`,
+    value: sql<number>`coalesce(sum(quantity * coalesce(sale_price, 0)), 0)`,
+  }).from(inventoryItems).where(eq(inventoryItems.companyId, dbUser.companyId!));
+  return { itemCount: Number(r.count), itemStockValue: Number(r.value) };
+}
+
 // Paginirana lista gotove robe za /inventory (umjesto svih 1607 odjednom)
 export async function getInventoryItemsPage(search: string, page = 1, pageSize = 30) {
   const { dbUser } = await getCurrentUser();

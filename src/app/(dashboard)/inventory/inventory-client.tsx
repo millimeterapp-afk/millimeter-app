@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createMaterial, receiveMaterial, createInventoryItem, receiveInventoryItem, updateMaterial, updateInventoryItem, importMaterials, importInventoryItems } from "@/lib/actions/inventory";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,11 +8,18 @@ import { Input } from "@/components/ui/input";
 import { AlertTriangle, Plus, X, ArrowDown, Search, Pencil, Upload } from "lucide-react";
 import type { Material, InventoryItem } from "@/lib/db/schema";
 
-export function InventoryClient({ materials, inventoryItems }: { materials: Material[]; inventoryItems: InventoryItem[] }) {
+export function InventoryClient({ materials, items, total, stats, q, page }: {
+  materials: Material[];
+  items: InventoryItem[];
+  total: number;
+  stats: { itemCount: number; itemStockValue: number };
+  q: string;
+  page: number;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<"materials" | "items">("materials");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(q);
   const [showAdd, setShowAdd] = useState(false);
   const [showReceive, setShowReceive] = useState<Material | null>(null);
   const [showReceiveItem, setShowReceiveItem] = useState<InventoryItem | null>(null);
@@ -28,24 +35,24 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
   const matFileRef = useRef<HTMLInputElement>(null);
   const itemFileRef = useRef<HTMLInputElement>(null);
 
+  // Gotova roba se pretražuje/paginira preko servera (URL); materijali klijentski (malo ih je)
+  const PAGE_SIZE = 30;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (search !== q) router.replace(`/inventory?q=${encodeURIComponent(search)}`);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search, q, router]);
+
   const filteredMaterials = materials.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
     (m.category ?? "").toLowerCase().includes(search.toLowerCase()) ||
     (m.code ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const filteredItems = inventoryItems.filter(m =>
-    m.name.toLowerCase().includes(search.toLowerCase()) ||
-    (m.category ?? "").toLowerCase().includes(search.toLowerCase()) ||
-    (m.sku ?? "").toLowerCase().includes(search.toLowerCase())
-  );
-
   const totalMaterialValue = materials.reduce((sum, m) =>
     sum + Number(m.currentStock) * Number(m.lastPurchasePrice ?? 0), 0
-  );
-
-  const totalItemValue = inventoryItems.reduce((sum, i) =>
-    sum + i.quantity * Number(i.salePrice ?? 0), 0
   );
 
   const handleAddMaterial = (e: React.FormEvent) => {
@@ -240,9 +247,9 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Materijali", value: String(materials.length) },
-          { label: "Gotova roba", value: String(inventoryItems.length) },
+          { label: "Gotova roba", value: String(stats.itemCount) },
           { label: "Niske zalihe (mat.)", value: `${materials.filter(m => (Number(m.currentStock) - Number(m.reservedStock)) < 5).length} art.`, color: "text-orange-600" },
-          { label: "Vrednost zaliha", value: `RSD ${Math.round(totalMaterialValue + totalItemValue).toLocaleString()}` },
+          { label: "Vrednost zaliha", value: `RSD ${Math.round(totalMaterialValue + stats.itemStockValue).toLocaleString()}` },
         ].map((s) => (
           <Card key={s.label}><CardContent className="pt-4 pb-4">
             <p className="text-sm text-muted-foreground">{s.label}</p>
@@ -255,7 +262,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
       <div className="flex gap-1 border-b">
         {[
           { key: "materials" as const, label: "Materijali", count: materials.length },
-          { key: "items" as const, label: "Gotova roba", count: inventoryItems.length },
+          { key: "items" as const, label: "Gotova roba", count: stats.itemCount },
         ].map(tab => (
           <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearch(""); }}
             className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5
@@ -579,7 +586,7 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map((item) => {
+                {items.map((item) => {
                   const free = item.quantity - item.reservedQuantity;
                   const lowStock = free <= 0;
                   return (
@@ -626,12 +633,28 @@ export function InventoryClient({ materials, inventoryItems }: { materials: Mate
                 })}
               </tbody>
             </table>
-            {filteredItems.length === 0 && (
-              <div className="text-center py-12 text-muted-foreground">Nema gotove robe.</div>
+            {items.length === 0 && (
+              <div className="text-center py-12 text-muted-foreground">
+                {q ? `Nema rezultata za "${q}".` : "Nema gotove robe."}
+              </div>
             )}
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "items" && totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Strana {page} / {totalPages} · {total} artikala</span>
+          <div className="flex gap-2">
+            <button disabled={page <= 1}
+              onClick={() => router.replace(`/inventory?q=${encodeURIComponent(q)}&page=${page - 1}`)}
+              className="border px-3 py-1 rounded-md hover:bg-muted disabled:opacity-40">Prethodna</button>
+            <button disabled={page >= totalPages}
+              onClick={() => router.replace(`/inventory?q=${encodeURIComponent(q)}&page=${page + 1}`)}
+              className="border px-3 py-1 rounded-md hover:bg-muted disabled:opacity-40">Sledeća</button>
+          </div>
+        </div>
       )}
     </div>
   );

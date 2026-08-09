@@ -1,7 +1,28 @@
-import { getMaterials, getInventoryItems } from "@/lib/actions/inventory";
+import { getMaterials, getInventoryItemsPage, getInventoryStats } from "@/lib/actions/inventory";
 import { InventoryClient } from "./inventory-client";
 
-export default async function InventoryPage() {
-  const [materials, inventoryItems] = await Promise.all([getMaterials(), getInventoryItems()]);
-  return <InventoryClient materials={materials} inventoryItems={inventoryItems} />;
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const params = await searchParams;
+  const q = params.q ?? "";
+  const page = Number(params.page) || 1;
+  // Gotova roba (1607) se NE učitava cela — server paginira/pretražuje. Materijali (malo) idu cela.
+  const [materials, stats, { items, total }] = await Promise.all([
+    getMaterials(),
+    getInventoryStats(),
+    getInventoryItemsPage(q, page),
+  ]);
+  return (
+    <InventoryClient
+      materials={materials}
+      items={items}
+      total={total}
+      stats={stats}
+      q={q}
+      page={page}
+    />
+  );
 }
