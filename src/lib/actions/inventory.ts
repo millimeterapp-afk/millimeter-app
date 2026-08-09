@@ -152,6 +152,30 @@ export async function getInventoryStats() {
   return { itemCount: Number(r.count), itemStockValue: Number(r.value) };
 }
 
+// Pretraga KATALOGA za nalog gotovog proizvoda — vraća artikle bez obzira na stanje
+// (za razliku od searchInventoryLite koji traži samo robu na stanju za POS).
+export async function searchCatalog(query: string) {
+  const { dbUser } = await getCurrentUser();
+  const q = (query || "").trim();
+  if (q.length < 1) return [];
+  return db
+    .select({
+      id: inventoryItems.id, name: inventoryItems.name, sku: inventoryItems.sku,
+      category: inventoryItems.category, salePrice: inventoryItems.salePrice,
+    })
+    .from(inventoryItems)
+    .where(and(
+      eq(inventoryItems.companyId, dbUser.companyId!),
+      or(
+        ilike(inventoryItems.name, `%${q}%`),
+        ilike(inventoryItems.sku, `%${q}%`),
+        ilike(inventoryItems.category, `%${q}%`)
+      )!
+    ))
+    .orderBy(inventoryItems.name)
+    .limit(30);
+}
+
 // Paginirana lista gotove robe za /inventory (umjesto svih 1607 odjednom)
 export async function getInventoryItemsPage(search: string, page = 1, pageSize = 30) {
   const { dbUser } = await getCurrentUser();
