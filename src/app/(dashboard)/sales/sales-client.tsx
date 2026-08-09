@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createSale } from "@/lib/actions/sales";
+import { searchInventoryLite } from "@/lib/actions/inventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CustomerPicker } from "@/components/customer-picker";
@@ -29,15 +30,15 @@ const paymentMethods = [
 ];
 
 export function SalesClient({
-  inventoryItems,
   recentSales,
 }: {
-  inventoryItems: InventoryItem[];
   recentSales: SaleWithDetails[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
+  const [results, setResults] = useState<InventoryItem[]>([]);
+  const [searching, startSearch] = useTransition();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; label: string } | null>(null);
   const [payment, setPayment] = useState<"cash" | "card" | "transfer">("cash");
@@ -48,12 +49,15 @@ export function SalesClient({
   const [manualName, setManualName] = useState("");
   const [manualPrice, setManualPrice] = useState("");
 
-  const filtered = inventoryItems.filter(
-    (i) =>
-      (i.name.toLowerCase().includes(search.toLowerCase()) ||
-        (i.category ?? "").toLowerCase().includes(search.toLowerCase())) &&
-      (i.quantity - i.reservedQuantity) > 0
-  );
+  // Server-pretraga artikala na stanju (debounce) — ne vučemo ceo katalog u browser
+  useEffect(() => {
+    const q = search.trim();
+    if (!q) return; // prazan upit — render pokazuje prompt, staro stanje se ne prikazuje
+    const t = setTimeout(() => {
+      startSearch(async () => setResults(await searchInventoryLite(q)));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const addToCart = (item: InventoryItem) => {
     setCart((prev) => {
@@ -185,15 +189,15 @@ export function SalesClient({
             </div>
           )}
 
-          {inventoryItems.length === 0 ? (
+          {!search.trim() ? (
             <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-xl">
               <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">Nema artikala u zalihi</p>
-              <p className="text-xs mt-1">Dodaj gotovu robu u <a href="/inventory" className="underline">Zalihe</a></p>
+              <p className="text-sm">Pretraži artikal na stanju</p>
+              <p className="text-xs mt-1">Ili dodaj ručno artikal koji nije u zalihama</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              {filtered.map((item) => {
+              {results.map((item) => {
                 const inCart = cart.find((c) => c.inventoryItemId === item.id);
                 const free = item.quantity - item.reservedQuantity;
                 return (
@@ -219,8 +223,8 @@ export function SalesClient({
                   </button>
                 );
               })}
-              {filtered.length === 0 && search && (
-                <p className="col-span-2 text-center py-6 text-sm text-muted-foreground">Nema rezultata za &quot;{search}&quot;</p>
+              {results.length === 0 && !searching && (
+                <p className="col-span-2 text-center py-6 text-sm text-muted-foreground">Nema robe na stanju za &quot;{search}&quot;</p>
               )}
             </div>
           )}

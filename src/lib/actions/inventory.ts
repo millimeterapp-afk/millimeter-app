@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { materials, inventoryItems, inventoryMovements } from "@/lib/db/schema";
 
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, or, ilike, desc, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireActiveUser } from "@/lib/auth";
 import * as XLSX from "xlsx";
@@ -118,6 +118,49 @@ export async function getInventoryItems() {
     .from(inventoryItems)
     .where(eq(inventoryItems.companyId, dbUser.companyId!))
     .orderBy(desc(inventoryItems.createdAt));
+}
+
+// Server-pretraga za biranje artikla u prodaji — vraća samo robu NA STANJU koja
+// odgovara upitu (do 30). Katalog (1607, stanje 0) se ne vuče ceo u browser.
+export async function searchInventoryLite(query: string) {
+  const { dbUser } = await getCurrentUser();
+  const q = (query || "").trim();
+  if (q.length < 1) return [];
+  return db
+    .select()
+    .from(inventoryItems)
+    .where(and(
+      eq(inventoryItems.companyId, dbUser.companyId!),
+      sql`(quantity - reserved_quantity) > 0`,
+      or(
+        ilike(inventoryItems.name, `%${q}%`),
+        ilike(inventoryItems.sku, `%${q}%`),
+        ilike(inventoryItems.category, `%${q}%`)
+      )!
+    ))
+    .orderBy(inventoryItems.name)
+    .limit(30);
+}
+
+// Paginirana lista gotove robe za /inventory (umjesto svih 1607 odjednom)
+export async function getInventoryItemsPage(search: string, page = 1, pageSize = 30) {
+  const { dbUser } = await getCurrentUser();
+  const conds = [eq(inventoryItems.companyId, dbUser.companyId!)];
+  const q = (search || "").trim();
+  if (q) {
+    conds.push(or(
+      ilike(inventoryItems.name, `%${q}%`),
+      ilike(inventoryItems.sku, `%${q}%`),
+      ilike(inventoryItems.category, `%${q}%`)
+    )!);
+  }
+  const safePage = Math.max(1, Math.floor(page) || 1);
+  const [rows, cnt] = await Promise.all([
+    db.select().from(inventoryItems).where(and(...conds))
+      .orderBy(inventoryItems.name).limit(pageSize).offset((safePage - 1) * pageSize),
+    db.select({ count: sql<number>`count(*)` }).from(inventoryItems).where(and(...conds)),
+  ]);
+  return { items: rows, total: Number(cnt[0].count) };
 }
 
 export async function createInventoryItem(data: {
