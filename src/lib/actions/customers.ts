@@ -10,6 +10,7 @@ import * as XLSX from "xlsx";
 import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders, getGoCreateOrdersSafe } from "@/lib/gocreate";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
+import { withTxRetry } from "@/lib/db-retry";
 
 async function getCompanyId() {
   const { companyId } = await requireActiveUser();
@@ -51,7 +52,7 @@ function phoneColNorm(col: AnyColumn) {
 function buildCustomerSearch(q: string) {
   const tokens = q.split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return undefined;
-  return and(
+  const perToken = and(
     ...tokens.map((t) => {
       const like = `%${foldSr(t)}%`;
       const digits = phoneDigits(t);
@@ -66,6 +67,13 @@ function buildCustomerSearch(q: string) {
       return or(...parts)!;
     })
   );
+  // Cijeli upit kao JEDAN telefonski kandidat — inače "+381 64 123 456" razbije na tokene
+  // gdje "+381" normalizuje u samo "0" (<2 cifre, preskoči se) pa AND promaši broj.
+  const wholeDigits = phoneDigits(q);
+  if (wholeDigits.length >= 5) {
+    return or(perToken, sql`${phoneColNorm(customers.phone)} LIKE ${`%${wholeDigits}%`}`);
+  }
+  return perToken;
 }
 
 export async function getCustomersPage(search: string, page: number, pageSize = 25, noPhoneOnly = false) {
@@ -119,7 +127,7 @@ export async function mergeCustomers(keepId: string, loseIds: string[]) {
   const losers = [...new Set(loseIds)].filter((id) => id && id !== keepId);
   if (losers.length === 0) throw new Error("Nema koga da se spoji.");
 
-  await db.transaction(async (tx) => {
+  await withTxRetry(() => db.transaction(async (tx) => {
     // Zaključaj sve u sortiranom redoslijedu (izbjegava deadlock kod paralelnih merge-ova)
     const allIds = [keepId, ...losers].sort();
     for (const id of allIds) {
@@ -199,7 +207,7 @@ export async function mergeCustomers(keepId: string, loseIds: string[]) {
     // 3) Soft-briši duplikate
     await tx.update(customers).set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(and(inArray(customers.id, realLosers), eq(customers.companyId, companyId)));
-  });
+  }));
 
   revalidatePath("/customers");
   revalidatePath("/customers/duplikati");
@@ -529,16 +537,16 @@ export async function saveMeasurements(
 ) {
   const { user, companyId } = await requireActiveUser();
 
-  // Klijent MORA pripadati firmi — bez ovoga bi UUID tuđeg klijenta
-  // deaktivirao njegova merenja (cross-tenant pisanje)
-  const customer = await db.query.customers.findFirst({
-    where: (c, { eq, and, isNull }) =>
-      and(eq(c.id, customerId), eq(c.companyId, companyId), isNull(c.deletedAt)),
-  });
-  if (!customer) throw new Error("Klijent nije pronađen.");
-
-  // Deaktivacija starih + upis novih — jedna transakcija
+  // Deaktivacija starih + upis novih — jedna transakcija.
   await db.transaction(async (tx) => {
+    // Klijent mora pripadati firmi i ne smije biti obrisan; zaključan (FOR KEY SHARE) da se
+    // pravilno serijalizuje sa merge-om (FOR UPDATE) — inače bi nove mere mogle završiti na
+    // upravo soft-obrisanom loser-u i ne bi bile prenete na keep.
+    const rows = (await tx.execute(sql`
+      SELECT id FROM customers WHERE id = ${customerId} AND company_id = ${companyId} AND deleted_at IS NULL FOR KEY SHARE
+    `)) as unknown as { id: string }[];
+    if (!rows[0]) throw new Error("Klijent nije pronađen.");
+
     await tx
       .update(customerMeasurements)
       .set({ isActive: false })
@@ -578,7 +586,7 @@ export async function addHistoricalPurchase(
   const dts = new Date(data.deliveredAt);
   if (isNaN(dts.getTime())) throw new Error("Datum nije ispravan.");
 
-  await db.transaction(async (tx) => {
+  await withTxRetry(() => db.transaction(async (tx) => {
     // Klijent MORA pripadati firmi i ne smije biti obrisan; zaključan (FOR KEY SHARE)
     // da ga paralelni merge ne soft-obriše dok pravimo nalog na njemu. Bez ove provjere
     // moglo se ubaciti nalog sa customer_id druge firme (cross-tenant) ili obrisanog.
@@ -620,7 +628,7 @@ export async function addHistoricalPurchase(
       await tx.update(customers).set({ loyaltyTier: calcLoyaltyTier(Number(updated.totalSpent)) })
         .where(and(eq(customers.id, customerId), eq(customers.companyId, companyId)));
     }
-  });
+  }));
 
   revalidatePath(`/customers/${customerId}`);
 }

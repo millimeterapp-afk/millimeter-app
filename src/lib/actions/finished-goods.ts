@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
+import { withTxRetry } from "@/lib/db-retry";
 
 // ─── Nalog za GOTOV PROIZVOD (v1 — Aleksandrov "prost nalog") ─────────────────
 // Ime/prezime/broj (izbor klijenta) + odabir artikla iz kataloga + opciona korekcija.
@@ -34,7 +35,7 @@ export async function createFinishedGoodsOrder(data: {
   const needsCorrection = !!data.needsCorrection;
   const today = belgradeToday();
 
-  await db.transaction(async (tx) => {
+  await withTxRetry(() => db.transaction(async (tx) => {
     // Klijent mora pripadati firmi i ne smije biti obrisan (zaključan da ga merge ne dira usput)
     const custRows = (await tx.execute(sql`
       SELECT id FROM customers WHERE id = ${data.customerId} AND company_id = ${companyId} AND deleted_at IS NULL FOR KEY SHARE
@@ -99,7 +100,7 @@ export async function createFinishedGoodsOrder(data: {
         createdBy: user.id,
       });
     }
-  });
+  }));
 
   revalidatePath("/orders");
   revalidatePath("/corrections");

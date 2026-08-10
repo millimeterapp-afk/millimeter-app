@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
+import { withTxRetry } from "@/lib/db-retry";
 
 async function getCurrentUser() {
   const { user, dbUser } = await requireActiveUser();
@@ -71,12 +72,11 @@ export async function createSale(data: {
     if (!cust) throw new Error("Klijent nije pronađen.");
   }
 
-  const saleNumber = await generateSaleNumber(companyId);
-
-  // Sve u jednoj transakciji — nema prodaje bez stavki/uplate.
-  // Cijena i stanje za artikle iz zaliha se čitaju iz baze pod ključem (FOR UPDATE),
-  // klijentu se ne vjeruje ni za cijenu ni za dostupnost.
-  const sale = await db.transaction(async (tx) => {
+  // Sve u jednoj transakciji — nema prodaje bez stavki/uplate. Broj prodaje se generiše
+  // UNUTAR retry-ja da paralelna kolizija (23505 na UNIQUE) dobije novi broj umjesto pada.
+  // Cijena i stanje za artikle iz zaliha se čitaju iz baze pod ključem (FOR UPDATE).
+  const sale = await withTxRetry(() => db.transaction(async (tx) => {
+    const saleNumber = await generateSaleNumber(companyId);
     // 1) Razriješi cijene i provjeri stanje za svaku stavku
     const resolved = [] as Array<{
       itemName: string;
@@ -186,7 +186,7 @@ export async function createSale(data: {
     }
 
     return s;
-  });
+  }));
 
   revalidatePath("/sales");
   revalidatePath("/inventory");

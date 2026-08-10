@@ -5,7 +5,8 @@ import { orders, materialReservations, productionTasks, materials, customers } f
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, notInArray } from "drizzle-orm";
+import { withTxRetry } from "@/lib/db-retry";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
 
@@ -177,7 +178,7 @@ export async function updateOrderStatus(
   }
 
   // Sve promjene (nalog + materijal + klijent + produkcija) u jednoj transakciji
-  await db.transaction(async (tx) => {
+  await withTxRetry(() => db.transaction(async (tx) => {
     // Zaključaj red i učitaj SVA polja koja koristimo POD ključem. Pred-transakcijski
     // `order` je mogao zastarjeti (paralelni merge prebaci customer_id, ili izmjena iznosa),
     // pa se svi efekti računaju isključivo iz zaključanog reda.
@@ -192,7 +193,10 @@ export async function updateOrderStatus(
     if (!L) return;
     if (L.purchase_id) throw new Error("Ovaj nalog pripada porudžbini — koristi 'Fazu izrade', ne stari tok.");
     if (L.status === status) return; // već u tom statusu (drugi tab) — ne diraj
-    if (L.status === "delivered") throw new Error("Isporučen nalog se ne može mijenjati."); // spriječi otkazivanje/vraćanje već knjiženog
+    // delivered i cancelled su TERMINALNI: bez ovoga bi paralelni cancelled+delivered
+    // (cancelled prvi otpusti materijal, delivered onda ipak knjizi novac/posjetu).
+    if (L.status === "delivered" || L.status === "cancelled")
+      throw new Error("Nalog je zatvoren (isporučen ili otkazan) — status se ne može mijenjati.");
 
     await tx
       .update(orders)
@@ -289,7 +293,7 @@ export async function updateOrderStatus(
         });
       }
     }
-  });
+  }));
 
   revalidatePath("/orders");
   revalidatePath(`/orders/${id}`);
@@ -340,7 +344,9 @@ export async function updateOrder(
 ) {
   const { dbUser } = await getCurrentUser();
 
-  await db
+  // Ne dozvoli izmjenu iznosa/materijala/podataka na ZATVORENOM nalogu (isporučen/otkazan) —
+  // inače bi stari tab promijenio totalAmount poslije knjiženja (klijent knjižen na stari iznos).
+  const updated = await db
     .update(orders)
     .set({
       ...( data.item !== undefined && { item: data.item }),
@@ -354,7 +360,12 @@ export async function updateOrder(
       ...( data.productionFlow !== undefined && { productionFlow: data.productionFlow }),
       updatedAt: new Date(),
     })
-    .where(and(eq(orders.id, id), eq(orders.companyId, dbUser.companyId!)));
+    .where(and(
+      eq(orders.id, id), eq(orders.companyId, dbUser.companyId!),
+      notInArray(orders.status, ["delivered", "cancelled"]),
+    ))
+    .returning({ id: orders.id });
+  if (updated.length === 0) throw new Error("Nalog ne postoji ili je zatvoren (isporučen/otkazan) — izmjena nije moguća.");
 
   revalidatePath(`/orders/${id}`);
   revalidatePath("/orders");

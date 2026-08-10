@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createSale } from "@/lib/actions/sales";
 import { searchInventoryLite } from "@/lib/actions/inventory";
@@ -49,12 +49,18 @@ export function SalesClient({
   const [manualName, setManualName] = useState("");
   const [manualPrice, setManualPrice] = useState("");
 
-  // Server-pretraga artikala na stanju (debounce) — ne vučemo ceo katalog u browser
+  // Server-pretraga artikala na stanju (debounce) — ne vučemo ceo katalog u browser.
+  // requestId štiti od odgovora koji stignu pogrešnim redoslijedom (primi se samo najnoviji).
+  const searchIdRef = useRef(0);
   useEffect(() => {
     const q = search.trim();
     if (!q) return; // prazan upit — render pokazuje prompt, staro stanje se ne prikazuje
+    const id = ++searchIdRef.current;
     const t = setTimeout(() => {
-      startSearch(async () => setResults(await searchInventoryLite(q)));
+      startSearch(async () => {
+        const r = await searchInventoryLite(q);
+        if (searchIdRef.current === id) setResults(r);
+      });
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
@@ -115,6 +121,7 @@ export function SalesClient({
         });
         setCart([]);
         setSelectedCustomer(null);
+        setSearch(""); // sakrij staru listu rezultata poslije prodaje
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
         router.refresh();

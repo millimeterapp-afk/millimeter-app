@@ -39,11 +39,12 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
   const PAGE_SIZE = 30;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   useEffect(() => {
+    if (activeTab !== "items") return; // materijali se filtriraju klijentski — bez server reload-a
     const t = setTimeout(() => {
       if (search !== q) router.replace(`/inventory?q=${encodeURIComponent(search)}`);
     }, 350);
     return () => clearTimeout(t);
-  }, [search, q, router]);
+  }, [search, q, router, activeTab]);
 
   const filteredMaterials = materials.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||

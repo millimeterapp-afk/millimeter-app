@@ -188,13 +188,15 @@ export async function getInventoryItemsPage(search: string, page = 1, pageSize =
       ilike(inventoryItems.category, `%${q}%`)
     )!);
   }
-  const safePage = Math.max(1, Math.floor(page) || 1);
+  const size = Math.min(100, Math.max(1, Math.floor(Number(pageSize)) || 30));
+  const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
   const [rows, cnt] = await Promise.all([
     db.select().from(inventoryItems).where(and(...conds))
-      .orderBy(inventoryItems.name).limit(pageSize).offset((safePage - 1) * pageSize),
+      // stabilan tie-breaker (name, id) — bez njega isti nazivi mogu da se dupliraju/preskoče na granici strane
+      .orderBy(inventoryItems.name, inventoryItems.id).limit(size).offset((safePage - 1) * size),
     db.select({ count: sql<number>`count(*)` }).from(inventoryItems).where(and(...conds)),
   ]);
-  return { items: rows, total: Number(cnt[0].count) };
+  return { items: rows, total: Number(cnt[0].count), page: safePage };
 }
 
 export async function createInventoryItem(data: {
