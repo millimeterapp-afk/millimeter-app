@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { CustomerPicker } from "@/components/customer-picker";
 import { searchCatalog } from "@/lib/actions/inventory";
@@ -31,11 +31,21 @@ export function GotovProizvodClient() {
   const [paid, setPaid] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  // Idempotency ključ po formularu — sprječava dupli nalog/naplatu (dvoklik, dva taba, retry)
+  const [idempKey, setIdempKey] = useState(() => crypto.randomUUID());
 
+  // requestId štiti od odgovora koji stignu pogrešnim redoslijedom
+  const searchRef = useRef(0);
   useEffect(() => {
     const q = artQuery.trim();
     if (!q || selected) return;
-    const t = setTimeout(() => { startSearch(async () => setResults(await searchCatalog(q))); }, 300);
+    const rid = ++searchRef.current;
+    const t = setTimeout(() => {
+      startSearch(async () => {
+        const r = await searchCatalog(q);
+        if (searchRef.current === rid) setResults(r);
+      });
+    }, 300);
     return () => clearTimeout(t);
   }, [artQuery, selected]);
 
@@ -65,9 +75,11 @@ export function GotovProizvodClient() {
           needsCorrection,
           correctionNote: needsCorrection ? correctionNote : undefined,
           inventoryItemId: selected?.id,
+          idempotencyKey: idempKey,
         });
         setSuccess(true);
         setCustomer(null); resetArticle(); setPayment("cash"); setNeedsCorrection(false); setCorrectionNote(""); setPaid(true);
+        setIdempKey(crypto.randomUUID()); // novi ključ za sljedeći nalog
         router.refresh();
         setTimeout(() => setSuccess(false), 2500);
       } catch (e) { setError(e instanceof Error ? e.message : "Greška pri kreiranju naloga."); }

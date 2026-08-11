@@ -336,11 +336,13 @@ export async function updateNalogStatus(nalogId: string, status: NalogStatusValu
       purchaseBefore = pr[0] ?? null;
     }
     const lockedRows = (await tx.execute(
-      sql`SELECT id, nalog_status, customer_id, purchase_id
+      sql`SELECT id, nalog_status, customer_id, purchase_id, order_kind
           FROM orders WHERE id = ${nalogId} AND company_id = ${companyId} FOR UPDATE`
-    )) as unknown as { id: string; nalog_status: string; customer_id: string | null; purchase_id: string | null }[];
+    )) as unknown as { id: string; nalog_status: string; customer_id: string | null; purchase_id: string | null; order_kind: string }[];
     const before = lockedRows[0];
     if (!before) throw new Error("Nalog nije pronađen.");
+    // Gotov proizvod se naplaćuje jednokratno pri kreiranju — ovaj tok bi ponovo knjižio posjetu.
+    if (before.order_kind === "gotov") throw new Error("Gotov proizvod ima svoj tok — ne kroz Fazu izrade.");
     if (before.nalog_status === status) return; // no-op — drugi zahtjev je već prošao
 
     await tx.update(orders)

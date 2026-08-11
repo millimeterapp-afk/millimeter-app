@@ -23,6 +23,7 @@ export async function createFinishedGoodsOrder(data: {
   needsCorrection?: boolean;
   correctionNote?: string;
   inventoryItemId?: string;
+  idempotencyKey?: string;
 }) {
   const { user, dbUser } = await requireActiveUser();
   const companyId = dbUser.companyId!;
@@ -41,6 +42,15 @@ export async function createFinishedGoodsOrder(data: {
       SELECT id FROM customers WHERE id = ${data.customerId} AND company_id = ${companyId} AND deleted_at IS NULL FOR KEY SHARE
     `)) as unknown as { id: string }[];
     if (!custRows[0]) throw new Error("Klijent nije pronađen.");
+
+    // Idempotency: isti formular (dva taba / dvoklik / retry) ne smije napraviti dupli
+    // nalog + duplu naplatu. Ako nalog sa ovim ključem već postoji — izađi.
+    if (data.idempotencyKey) {
+      const dup = (await tx.execute(sql`
+        SELECT id FROM orders WHERE company_id = ${companyId} AND idempotency_key = ${data.idempotencyKey} LIMIT 1
+      `)) as unknown as { id: string }[];
+      if (dup[0]) return;
+    }
 
     // Broj naloga GP-YYYY-NNNN (count+1; UNIQUE(company_id, order_number) je backstop)
     const cnt = (await tx.execute(sql`SELECT count(*)::int AS c FROM orders WHERE company_id = ${companyId}`)) as unknown as { c: number }[];
@@ -62,6 +72,7 @@ export async function createFinishedGoodsOrder(data: {
       deliveredAt: needsCorrection ? null : new Date(),
       completedAt: needsCorrection ? null : new Date(),
       notes: data.inventoryItemId ? `Katalog artikal: ${data.inventoryItemId}` : null,
+      idempotencyKey: data.idempotencyKey ?? null,
     }).returning({ id: orders.id });
 
     // Uplata + knjiženje na klijenta samo ako je naplaćeno

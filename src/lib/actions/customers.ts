@@ -539,11 +539,11 @@ export async function saveMeasurements(
 
   // Deaktivacija starih + upis novih — jedna transakcija.
   await db.transaction(async (tx) => {
-    // Klijent mora pripadati firmi i ne smije biti obrisan; zaključan (FOR KEY SHARE) da se
-    // pravilno serijalizuje sa merge-om (FOR UPDATE) — inače bi nove mere mogle završiti na
-    // upravo soft-obrisanom loser-u i ne bi bile prenete na keep.
+    // Klijent mora pripadati firmi i ne smije biti obrisan; zaključan FOR UPDATE da se
+    // serijalizuje i sa merge-om i sa DRUGIM paralelnim saveMeasurements (inače bi oba
+    // ubacila aktivan set i drugi bi pao na partial-unique).
     const rows = (await tx.execute(sql`
-      SELECT id FROM customers WHERE id = ${customerId} AND company_id = ${companyId} AND deleted_at IS NULL FOR KEY SHARE
+      SELECT id FROM customers WHERE id = ${customerId} AND company_id = ${companyId} AND deleted_at IS NULL FOR UPDATE
     `)) as unknown as { id: string }[];
     if (!rows[0]) throw new Error("Klijent nije pronađen.");
 

@@ -163,6 +163,11 @@ export async function updateOrderStatus(
   if (order.purchaseId) {
     throw new Error("Ovaj nalog pripada porudžbini — koristi 'Fazu izrade', ne stari tok.");
   }
+  // Gotov proizvod ima svoj (jednokratni) tok naplate pri kreiranju — stari lifecycle bi
+  // ponovo knjižio novac/posjetu na već naplaćen nalog.
+  if (order.orderKind === "gotov") {
+    throw new Error("Gotov proizvod se ne vodi kroz stari tok statusa.");
+  }
 
   // No-op: isti status → ne diraj ništa. Bez ovoga bi dupli klik na "isporučeno"
   // dva puta knjižio totalSpent i posjetu klijentu.
@@ -307,6 +312,14 @@ export async function updateOrderPayment(
   totalAmount: number
 ) {
   const { dbUser } = await getCurrentUser();
+
+  // Gotov proizvod ima svoju naplatu (payments + totalSpent); ovaj stari update bi samo
+  // dirao paidAmount/paymentStatus bez evidencije uplate i loyalty-ja.
+  const ord = await db.query.orders.findFirst({
+    where: (o, { eq, and }) => and(eq(o.id, id), eq(o.companyId, dbUser.companyId!)),
+    columns: { orderKind: true },
+  });
+  if (ord?.orderKind === "gotov") throw new Error("Gotov proizvod ima svoju naplatu — ne koristi stari tok uplate.");
 
   const paymentStatus =
     paidAmount >= totalAmount

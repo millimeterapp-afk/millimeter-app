@@ -205,6 +205,7 @@ export const orders = pgTable("orders", {
   sleeveType: text("sleeve_type"),
   fitType: text("fit_type"),
   measurementSnapshot: jsonb("measurement_snapshot"),
+  idempotencyKey: text("idempotency_key"), // sprječava dupli nalog (gotov proizvod) iz dva taba/retry
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -149,6 +149,9 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
   const currentStepIndex = statusFlow.findIndex(s => s.id === order.status);
   const nextStatus = nextStatusMap[order.status];
   const totalAmount = Number(order.totalAmount);
+  // Gotov proizvod ima svoj jednokratni tok (naplata pri kreiranju) — stari lifecycle,
+  // Faza izrade i stara uplata su blokirani server-side, pa ih ovdje i sakrivamo.
+  const isGotov = order.orderKind === "gotov";
 
   // Plaćanje: ako nalog pripada porudžbini, avans/naplata se vode na nivou
   // porudžbine (jedan avans pokriva sve naloge). Inače — po nalogu (stari model).
@@ -783,14 +786,14 @@ ${order.notes ? `
             className="flex items-center gap-2 border px-3 py-2 rounded-md text-sm hover:bg-muted transition-colors">
             <Printer className="w-4 h-4" /> Štampaj
           </button>
-          {order.status !== "delivered" && order.status !== "cancelled" && (
+          {order.status !== "delivered" && order.status !== "cancelled" && !isGotov && (
             <button onClick={handleCancel} disabled={isPending}
               className="flex items-center gap-2 border border-red-200 text-red-600 px-3 py-2 rounded-md text-sm hover:bg-red-50 transition-colors disabled:opacity-50">
               Otkaži
             </button>
           )}
-          {/* Staro lifecycle dugme samo za legacy naloge — za porudžbine bi DUPLO knjižilo */}
-          {!hasPurchase && nextStatus && nextActionLabels[order.status] && (
+          {/* Staro lifecycle dugme samo za legacy naloge — za porudžbine/gotov bi DUPLO knjižilo */}
+          {!hasPurchase && !isGotov && nextStatus && nextActionLabels[order.status] && (
             <button onClick={handleStatusChange} disabled={isPending}
               className="bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors disabled:opacity-50">
               {isPending ? "..." : nextActionLabels[order.status]}
@@ -805,8 +808,8 @@ ${order.notes ? `
         </div>
       )}
 
-      {/* Status timeline — SAMO legacy nalozi; porudžbine koriste Fazu izrade */}
-      {!hasPurchase && (
+      {/* Status timeline — SAMO legacy nalozi; porudžbine/gotov koriste svoj tok */}
+      {!hasPurchase && !isGotov && (
       <Card>
         <CardContent className="pt-5 pb-5">
           <div className="flex items-center">
@@ -831,7 +834,8 @@ ${order.notes ? `
       </Card>
       )}
 
-      {/* Faza izrade — detaljni tok kroz radionicu (nalogStatus) */}
+      {/* Faza izrade — detaljni tok kroz radionicu (nalogStatus); gotov ima svoj tok */}
+      {!isGotov && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Faza izrade</CardTitle>
@@ -864,6 +868,7 @@ ${order.notes ? `
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Stavke naloga — artikli iz porudžbine */}
       {order.items.length > 0 && (
@@ -1104,7 +1109,7 @@ ${order.notes ? `
             <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
               <CreditCard className="w-4 h-4" /> Naplata{hasPurchase && <span className="normal-case font-normal text-muted-foreground/70">(porudžbina {order.purchase!.purchaseNumber})</span>}
             </CardTitle>
-            {remaining > 0 && (
+            {remaining > 0 && !isGotov && (
               <button onClick={() => setShowPayment(!showPayment)}
                 className="text-xs bg-black text-white px-3 py-1.5 rounded hover:bg-black/80">
                 + Uplata
