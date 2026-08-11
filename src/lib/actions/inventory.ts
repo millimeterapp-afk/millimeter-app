@@ -13,6 +13,20 @@ async function getCurrentUser() {
   return { user, dbUser };
 }
 
+// Pretraga artikala/materijala PO RIJEČIMA: svaka riječ upita mora da se nađe u nekom polju
+// (naziv/šifra/kategorija). Time "Falke 2000" pogađa "Falke 10305 2000", a "Carpi 70"
+// pogađa "Carpi 400/70" (Aleksandrov komentar — redoslijed riječi nije bitan).
+function buildInventorySearch(q: string) {
+  const tokens = q.split(/\s+/).filter(Boolean);
+  return and(
+    ...tokens.map((t) => or(
+      ilike(inventoryItems.name, `%${t}%`),
+      ilike(inventoryItems.sku, `%${t}%`),
+      ilike(inventoryItems.category, `%${t}%`)
+    )!)
+  );
+}
+
 export async function getMaterials() {
   const { dbUser } = await getCurrentUser();
 
@@ -132,11 +146,7 @@ export async function searchInventoryLite(query: string) {
     .where(and(
       eq(inventoryItems.companyId, dbUser.companyId!),
       sql`(quantity - reserved_quantity) > 0`,
-      or(
-        ilike(inventoryItems.name, `%${q}%`),
-        ilike(inventoryItems.sku, `%${q}%`),
-        ilike(inventoryItems.category, `%${q}%`)
-      )!
+      buildInventorySearch(q)
     ))
     .orderBy(inventoryItems.name)
     .limit(30);
@@ -166,11 +176,7 @@ export async function searchCatalog(query: string) {
     .from(inventoryItems)
     .where(and(
       eq(inventoryItems.companyId, dbUser.companyId!),
-      or(
-        ilike(inventoryItems.name, `%${q}%`),
-        ilike(inventoryItems.sku, `%${q}%`),
-        ilike(inventoryItems.category, `%${q}%`)
-      )!
+      buildInventorySearch(q)
     ))
     .orderBy(inventoryItems.name)
     .limit(30);
@@ -182,11 +188,7 @@ export async function getInventoryItemsPage(search: string, page = 1, pageSize =
   const conds = [eq(inventoryItems.companyId, dbUser.companyId!)];
   const q = (search || "").trim();
   if (q) {
-    conds.push(or(
-      ilike(inventoryItems.name, `%${q}%`),
-      ilike(inventoryItems.sku, `%${q}%`),
-      ilike(inventoryItems.category, `%${q}%`)
-    )!);
+    conds.push(buildInventorySearch(q)!);
   }
   const size = Math.min(100, Math.max(1, Math.floor(Number(pageSize)) || 30));
   const safePage = Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1;
