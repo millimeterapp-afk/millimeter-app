@@ -1,13 +1,67 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect } from "react";
+import { useState, useTransition, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPurchase } from "@/lib/actions/purchases";
 import { searchCustomersLite } from "@/lib/actions/customers";
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, ChevronDown } from "lucide-react";
+import { searchMaterials } from "@/lib/actions/inventory";
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2, ChevronDown, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import type { Customer, Material, InventoryItem } from "@/lib/db/schema";
+import type { Customer, InventoryItem } from "@/lib/db/schema";
+
+// Picker materijala — traži se na serveru (2.000+ ih je), pa nema smisla sve slati u browser.
+// Aleksandrov komentar #2: kod domaće proizvodnje polje materijala mora da nudi materijale iz baze
+// (Getzner, Albini, Carpi…), a ne prazan dropdown ili slobodan unos.
+function MaterialPicker({ value, onChange }: { value: string; onChange: (name: string) => void }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<{ id: string; name: string; code: string | null; category: string | null }[]>([]);
+  const [open, setOpen] = useState(false);
+  const [, startSearch] = useTransition();
+  const ridRef = useRef(0);
+
+  useEffect(() => {
+    const query = q.trim();
+    if (!query) return; // prazan upit — ne diramo state sinhrono (render se čuva q.trim() uslovom)
+    const rid = ++ridRef.current;
+    const t = setTimeout(() => {
+      startSearch(async () => {
+        const r = await searchMaterials(query);
+        if (ridRef.current === rid) setResults(r);
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  if (value) {
+    return (
+      <div className="mt-1 flex items-center justify-between border rounded-md px-3 py-2 bg-white">
+        <span className="text-sm">{value}</span>
+        <button type="button" onClick={() => { onChange(""); setQ(""); }}
+          className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1 relative">
+      <input value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
+        className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
+        placeholder="Pretraži materijal (npr. Carpi 400/70, Getzner)..." />
+      {open && q.trim() && results.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto border rounded-md bg-white shadow-lg">
+          {results.map((m) => (
+            <button key={m.id} type="button"
+              onClick={() => { onChange(m.name); setQ(""); setResults([]); setOpen(false); }}
+              className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0">
+              <p className="text-sm">{m.name}</p>
+              <p className="text-xs text-muted-foreground">{m.category ?? "—"}{m.code ? ` · ${m.code}` : ""}</p>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const steps = ["Klijent", "Nalozi", "Avans i potvrda"];
 
@@ -76,8 +130,8 @@ function emptyNalog(kind: OrderKind = "domaca"): Nalog {
 }
 
 export function NewOrderClient({
-  materials, inventoryItems,
-}: { materials: Material[]; inventoryItems: InventoryItem[] }) {
+  inventoryItems,
+}: { inventoryItems: InventoryItem[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedCustomerId = searchParams.get("customerId") ?? "";
@@ -117,8 +171,6 @@ export function NewOrderClient({
   // Isti ključ za sve pokušaje ove forme — retry ne pravi duplu porudžbinu
   const [idempotencyKey] = useState(() =>
     typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
-
-  const fabrics = materials.filter((m) => m.category === "Tkanina" || m.category === "Postava");
 
   // — Izračun ukupne sume —
   const total = useMemo(
@@ -318,6 +370,14 @@ export function NewOrderClient({
                       </div>
                     </div>
 
+                    {/* Materijal — samo za domaću proizvodnju (bira se iz baze materijala) */}
+                    {nalog.orderKind === "domaca" && (
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Materijal</label>
+                        <MaterialPicker value={it.material} onChange={(name) => updateItem(ni, ii, { material: name })} />
+                      </div>
+                    )}
+
                     {/* Munro: detalji se unose kod njih, ne kod nas */}
                     {nalog.orderKind === "munro" && (
                       <p className="text-xs text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-1.5">
@@ -372,16 +432,6 @@ export function NewOrderClient({
                                 </select>
                               </div>
                             </div>
-                            {nalog.orderKind === "domaca" && fabrics.length > 0 && (
-                              <div>
-                                <label className="text-xs text-muted-foreground">Materijal</label>
-                                <select value={it.material} onChange={(e) => updateItem(ni, ii, { material: e.target.value })}
-                                  className="w-full mt-1 border rounded-md px-2 py-1.5 text-sm bg-white">
-                                  <option value="">— Bez / ručno —</option>
-                                  {fabrics.map((m) => <option key={m.id} value={m.name}>{m.name} {m.code ? `(${m.code})` : ""}</option>)}
-                                </select>
-                              </div>
-                            )}
                             <div className="flex items-center gap-2">
                               <input type="checkbox" id={`mono-${ni}-${ii}`} checked={it.monogram}
                                 onChange={(e) => updateItem(ni, ii, { monogram: e.target.checked })}

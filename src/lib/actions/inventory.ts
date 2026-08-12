@@ -162,6 +162,28 @@ export async function getInventoryStats() {
   return { itemCount: Number(r.count), itemStockValue: Number(r.value) };
 }
 
+// Pretraga MATERIJALA (za domaću proizvodnju / nalog za košulju) — po riječima, do 30.
+// Aleksandrov komentar #2: polje materijala u nalogu treba da nudi materijale iz baze.
+export async function searchMaterials(query: string) {
+  const { dbUser } = await getCurrentUser();
+  const q = (query || "").trim();
+  if (q.length < 1) return [];
+  const tokens = q.split(/\s+/).filter(Boolean);
+  return db
+    .select({ id: materials.id, name: materials.name, code: materials.code, category: materials.category })
+    .from(materials)
+    .where(and(
+      eq(materials.companyId, dbUser.companyId!),
+      ...tokens.map((t) => or(
+        ilike(materials.name, `%${t}%`),
+        ilike(materials.code, `%${t}%`),
+        ilike(materials.category, `%${t}%`)
+      )!)
+    ))
+    .orderBy(materials.name)
+    .limit(30);
+}
+
 // Pretraga KATALOGA za nalog gotovog proizvoda — vraća artikle bez obzira na stanje
 // (za razliku od searchInventoryLite koji traži samo robu na stanju za POS).
 export async function searchCatalog(query: string) {

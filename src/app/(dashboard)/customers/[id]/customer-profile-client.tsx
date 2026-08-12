@@ -9,6 +9,7 @@ import { ArrowLeft, Phone, Mail, MapPin, Ruler, Star, ClipboardList, Wrench, Che
 import Link from "next/link";
 import type { Customer, CustomerMeasurement, Order, OrderItem, Correction, Appointment, MunroOrder } from "@/lib/db/schema";
 import type { GoCreateOrder } from "@/lib/gocreate";
+import { MEASUREMENT_FIELDS } from "@/lib/measurements";
 
 type CustomerWithDetails = Customer & {
   measurements: CustomerMeasurement[];
@@ -128,16 +129,7 @@ export function CustomerProfileClient({ customer, appointments, munroOrders }: {
 
   const measurements = customer.measurements[0]?.data as Record<string, string> | undefined;
 
-  const measurementFields = [
-    { key: "vrat", label: "Vrat" },
-    { key: "grudi", label: "Grudi" },
-    { key: "struk", label: "Struk" },
-    { key: "kuk", label: "Kuk" },
-    { key: "rame", label: "Rame" },
-    { key: "rukav", label: "Rukav" },
-    { key: "duzina", label: "Dužina" },
-    { key: "stomak", label: "Stomak" },
-  ];
+  const measurementFields = MEASUREMENT_FIELDS;
 
   const [showMeasEdit, setShowMeasEdit] = useState(false);
   const [measForm, setMeasForm] = useState<Record<string, string>>(
@@ -348,18 +340,23 @@ export function CustomerProfileClient({ customer, appointments, munroOrders }: {
               {showMeasEdit ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-2">
-                    {measurementFields.map(({ key, label }) => (
+                    {measurementFields.map(({ key, label, type }) => (
                       <div key={key}>
-                        <label className="text-xs text-muted-foreground">{label}</label>
+                        <label className="text-xs text-muted-foreground">
+                          {label}{type === "range" && <span className="text-muted-foreground/70"> (od-do)</span>}
+                        </label>
                         <div className="relative mt-1">
                           <Input
-                            type="number"
+                            type={type === "num" ? "number" : "text"}
+                            inputMode={type === "num" ? "numeric" : undefined}
                             value={measForm[key] ?? ""}
                             onChange={(e) => setMeasForm({ ...measForm, [key]: e.target.value })}
-                            className="h-8 text-sm pr-8"
-                            placeholder="0"
+                            className={`h-8 text-sm ${type === "text" ? "" : "pr-8"}`}
+                            placeholder={type === "range" ? "npr. 98-102" : type === "text" ? "—" : "0"}
                           />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">cm</span>
+                          {type !== "text" && (
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">cm</span>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -371,13 +368,14 @@ export function CustomerProfileClient({ customer, appointments, munroOrders }: {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
-                  {measurementFields.map(({ key, label }) => {
+                  {measurementFields.map(({ key, label, type }) => {
                     const val = measurements?.[key];
+                    const has = val && val !== "—";
                     return (
                       <div key={key} className="bg-muted/50 rounded-md p-2.5">
                         <p className="text-xs text-muted-foreground">{label}</p>
                         <p className="text-sm font-semibold mt-0.5">
-                          {val && val !== "—" ? `${val} cm` : "—"}
+                          {has ? (type === "text" ? val : `${val} cm`) : "—"}
                         </p>
                       </div>
                     );

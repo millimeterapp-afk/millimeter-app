@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus, X, Upload, Download, Merge, PhoneOff } from "lucide-react";
 import Link from "next/link";
 import type { Customer } from "@/lib/db/schema";
+import { MEASUREMENT_FIELDS, emptyMeasurements } from "@/lib/measurements";
 
 const tierColors: Record<string, string> = {
   Platinum: "bg-purple-100 text-purple-800",
@@ -18,7 +19,7 @@ const tierColors: Record<string, string> = {
 
 const emptyForm = {
   firstName: "", lastName: "", email: "", phone: "", city: "",
-  vrat: "", grudi: "", struk: "", kuk: "", rame: "", rukav: "", duzina: "",
+  meas: emptyMeasurements() as Record<string, string>,
 };
 
 const PAGE_SIZE = 25;
@@ -88,10 +89,7 @@ export function CustomersClient({
           phone: form.phone,
           email: form.email || undefined,
           city: form.city || undefined,
-          measurements: {
-            vrat: form.vrat, grudi: form.grudi, struk: form.struk,
-            kuk: form.kuk, rame: form.rame, rukav: form.rukav, duzina: form.duzina,
-          },
+          measurements: form.meas,
         });
         setShowForm(false);
         setForm(emptyForm);
@@ -215,14 +213,16 @@ export function CustomersClient({
               <div className="border-t pt-4">
                 <p className="text-xs font-medium text-muted-foreground mb-3">Merenja (cm) — opciono</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {(["vrat", "grudi", "struk", "kuk", "rame", "rukav", "duzina"] as const).map((m) => (
-                    <div key={m}>
-                      <label className="text-xs text-muted-foreground capitalize">{m}</label>
+                  {MEASUREMENT_FIELDS.map(({ key, label, type }) => (
+                    <div key={key}>
+                      <label className="text-xs text-muted-foreground">{label}</label>
                       <Input
-                        value={form[m]}
-                        onChange={(e) => setForm({ ...form, [m]: e.target.value })}
+                        type={type === "num" ? "number" : "text"}
+                        inputMode={type === "num" ? "numeric" : undefined}
+                        value={form.meas[key] ?? ""}
+                        onChange={(e) => setForm({ ...form, meas: { ...form.meas, [key]: e.target.value } })}
                         className="mt-0.5 h-8 text-sm"
-                        placeholder="00"
+                        placeholder={type === "range" ? "od-do" : "00"}
                       />
                     </div>
                   ))}
