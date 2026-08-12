@@ -335,7 +335,9 @@ export function NewOrderClient({
                   <div key={ii} className="border rounded-lg p-3 space-y-3 bg-muted/20">
                     <div className="flex items-start gap-2">
                       <div className="flex-1">
-                        <label className="text-xs font-medium text-muted-foreground">Artikal *</label>
+                        <label className="text-xs font-medium text-muted-foreground">
+                          {nalog.orderKind === "domaca" ? "Artikal (materijal) *" : "Artikal *"}
+                        </label>
                         {nalog.orderKind === "munro" ? (
                           // Munro: bira se vrsta komada. Dizajn detalji se unose u Munru, ne kod nas.
                           <select value={it.artikal}
@@ -344,11 +346,16 @@ export function NewOrderClient({
                             <option value="">— Izaberi vrstu —</option>
                             {MUNRO_ARTIKLI.map((a) => <option key={a} value={a}>{a}</option>)}
                           </select>
+                        ) : nalog.orderKind === "domaca" ? (
+                          // Domaća proizvodnja (košulja): artikal JESTE materijal — bira se iz baze
+                          // materijala (Aleksandrov komentar #2). Isti izbor puni i polje materijala.
+                          <MaterialPicker value={it.artikal}
+                            onChange={(name) => updateItem(ni, ii, { artikal: name, material: name })} />
                         ) : (
                           <input list="artikli" value={it.artikal}
                             onChange={(e) => updateItem(ni, ii, { artikal: e.target.value })}
                             className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
-                            placeholder="npr. Košulja Puplin IT021" />
+                            placeholder="npr. Falke 10305 2000 / Ukrasno dugme" />
                         )}
                       </div>
                       {nalog.items.length > 1 && (
@@ -369,14 +376,6 @@ export function NewOrderClient({
                           onChange={(e) => updateItem(ni, ii, { unitPrice: e.target.value })} className="mt-1" placeholder="0" />
                       </div>
                     </div>
-
-                    {/* Materijal — samo za domaću proizvodnju (bira se iz baze materijala) */}
-                    {nalog.orderKind === "domaca" && (
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">Materijal</label>
-                        <MaterialPicker value={it.material} onChange={(name) => updateItem(ni, ii, { material: name })} />
-                      </div>
-                    )}
 
                     {/* Munro: detalji se unose kod njih, ne kod nas */}
                     {nalog.orderKind === "munro" && (
