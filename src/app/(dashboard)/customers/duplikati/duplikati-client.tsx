@@ -70,9 +70,10 @@ export function DuplikatiClient({ exactDupes, nameVariants }: { exactDupes: DupG
         <h1 className="text-2xl font-bold flex items-center gap-2"><Users className="w-6 h-6" /> Mogući duplikati</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Spajanjem se sva istorija (Munro, nalozi, korekcije, termini, mere) prebacuje na klijenta koji ostaje,
-          uzme se telefon ako fali, a duplikat se briše. Radio bira ko ostaje; kvačicom biraš koje zapise
-          spajaš u njega. Ako je u grupi neko druga osoba (isto ime), skini mu kvačicu — ostaje zaseban klijent.
-          Dugme Otvori prikaže profil (mere, istorija) u novom tabu da uporediš. Ako baš nisu isti, klikni Nisu isti.
+          uzme se telefon ako fali, a duplikat se briše. Prvo izaberi jednog koji ostaje, pa kvačicom označi
+          koje ostale spajaš u njega. Ako je u grupi neko druga osoba (isto ime), skini mu kvačicu — ostaje
+          zaseban klijent. Dugme Otvori prikaže profil (mere, istorija) u novom tabu da uporediš. Ako baš nisu
+          isti, klikni Nisu isti.
         </p>
       </div>
 
@@ -135,7 +136,7 @@ export function DuplikatiClient({ exactDupes, nameVariants }: { exactDupes: DupG
                     className="text-sm bg-black text-white px-3 py-1.5 rounded-md hover:bg-black/80 disabled:opacity-50 flex items-center gap-1.5">
                     <Merge className="w-4 h-4" /> {busy === tag ? "Spajam..." : `Spoji označene u izabranog (${loseIds.length})`}
                   </button>
-                  <span className="text-xs text-muted-foreground">radio = ostaje; skini kvačicu ako je druga osoba</span>
+                  <span className="text-xs text-muted-foreground">izaberi ko ostaje; skini kvačicu ako je druga osoba</span>
                 </div>
               </CardContent>
             </Card>
