@@ -26,6 +26,18 @@ export function DuplikatiClient({ exactDupes, nameVariants }: { exactDupes: DupG
   const [keepers, setKeepers] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Koje članove grupe spajamo u izabranog. Ako nema unosa za grupu — podrazumeva se SVI
+  // (ponašanje kao ranije). Za grupe gde je isto ime ali RAZLIČITE osobe, skidaš kvačicu
+  // s onih koji nisu ta osoba pa spojiš samo podskup (Aleksandrov komentar R4).
+  const [mergeSel, setMergeSel] = useState<Record<string, Set<string>>>({});
+
+  const isSel = (key: string, id: string) => (mergeSel[key] ? mergeSel[key].has(id) : true);
+  const toggleSel = (key: string, id: string, allIds: string[]) =>
+    setMergeSel((prev) => {
+      const cur = new Set(prev[key] ?? allIds);
+      if (cur.has(id)) cur.delete(id); else cur.add(id);
+      return { ...prev, [key]: cur };
+    });
 
   const hide = (id: string) => setDismissed((s) => new Set(s).add(id));
 
@@ -58,7 +70,9 @@ export function DuplikatiClient({ exactDupes, nameVariants }: { exactDupes: DupG
         <h1 className="text-2xl font-bold flex items-center gap-2"><Users className="w-6 h-6" /> Mogući duplikati</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Spajanjem se sva istorija (Munro, nalozi, korekcije, termini, mere) prebacuje na klijenta koji ostaje,
-          uzme se telefon ako fali, a duplikat se briše. Ako su različite osobe, klikni na dugme Nisu isti.
+          uzme se telefon ako fali, a duplikat se briše. Radio bira ko ostaje; kvačicom biraš koje zapise
+          spajaš u njega. Ako je u grupi neko druga osoba (isto ime), skini mu kvačicu — ostaje zaseban klijent.
+          Dugme Otvori prikaže profil (mere, istorija) u novom tabu da uporediš. Ako baš nisu isti, klikni Nisu isti.
         </p>
       </div>
 
@@ -71,9 +85,11 @@ export function DuplikatiClient({ exactDupes, nameVariants }: { exactDupes: DupG
         </h2>
         {visibleGroups.length === 0 && <p className="text-sm text-muted-foreground">Nema (ili su svi obrađeni).</p>}
         {visibleGroups.map((g) => {
+          const allIds = g.members.map((m) => m.id);
           const keepId = keepers[g.key] ?? g.members[0].id;
           const keeper = g.members.find((m) => m.id === keepId)!;
-          const loseIds = g.members.filter((m) => m.id !== keepId).map((m) => m.id);
+          // Spajaju se samo označeni (podrazumevano svi), nikad izabrani-koji-ostaje
+          const loseIds = g.members.filter((m) => m.id !== keepId && isSel(g.key, m.id)).map((m) => m.id);
           const tag = `g-${g.key}`;
           const confirmMsg = `Spoji ${loseIds.length} zapis(a) u ${keeper.firstName} ${keeper.lastName} (${keeper.phone?.trim() || "bez broja"})? Ostali se brišu, istorija im se prebacuje.`;
           return (
@@ -88,27 +104,38 @@ export function DuplikatiClient({ exactDupes, nameVariants }: { exactDupes: DupG
                 </button>
               </CardHeader>
               <CardContent className="space-y-1.5">
-                {g.members.map((m) => (
-                  <label key={m.id} className="flex items-start gap-3 p-2 rounded-md hover:bg-muted/40 cursor-pointer">
-                    <input type="radio" name={`keep-${g.key}`} checked={keepId === m.id}
-                      onChange={() => setKeepers((k) => ({ ...k, [g.key]: m.id }))} className="mt-1" />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium flex items-center gap-2">
-                        <Phone className="w-3.5 h-3.5 text-muted-foreground" />
-                        {m.phone?.trim() ? m.phone : <span className="italic text-muted-foreground">bez broja</span>}
+                {g.members.map((m) => {
+                  const isKeep = keepId === m.id;
+                  return (
+                    <div key={m.id} className="flex items-start gap-2.5 p-2 rounded-md hover:bg-muted/40">
+                      <input type="radio" name={`keep-${g.key}`} checked={isKeep} title="Ovaj ostaje"
+                        onChange={() => setKeepers((k) => ({ ...k, [g.key]: m.id }))} className="mt-1" />
+                      {isKeep ? (
+                        <span className="mt-0.5 text-[10px] font-medium text-black shrink-0 w-10">ostaje</span>
+                      ) : (
+                        <input type="checkbox" checked={isSel(g.key, m.id)} title="Spoji ovog u izabranog"
+                          onChange={() => toggleSel(g.key, m.id, allIds)} className="mt-1" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium flex items-center gap-2">
+                          <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                          {m.phone?.trim() ? m.phone : <span className="italic text-muted-foreground">bez broja</span>}
+                          <Link href={`/customers/${m.id}`} target="_blank"
+                            className="ml-auto text-xs text-blue-600 hover:underline shrink-0">otvori</Link>
+                        </div>
+                        <Info munro={m.munro} orders={m.orders} totalSpent={m.totalSpent} lastVisit={m.lastVisit} />
                       </div>
-                      <Info munro={m.munro} orders={m.orders} totalSpent={m.totalSpent} lastVisit={m.lastVisit} />
                     </div>
-                  </label>
-                ))}
+                  );
+                })}
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     onClick={() => doMerge(tag, keepId, loseIds, confirmMsg)}
-                    disabled={isPending && busy === tag}
+                    disabled={(isPending && busy === tag) || loseIds.length === 0}
                     className="text-sm bg-black text-white px-3 py-1.5 rounded-md hover:bg-black/80 disabled:opacity-50 flex items-center gap-1.5">
-                    <Merge className="w-4 h-4" /> {busy === tag ? "Spajam..." : `Spoji ostale u izabranog (${loseIds.length})`}
+                    <Merge className="w-4 h-4" /> {busy === tag ? "Spajam..." : `Spoji označene u izabranog (${loseIds.length})`}
                   </button>
-                  <span className="text-xs text-muted-foreground">označeni ostaje, ostali se spajaju u njega</span>
+                  <span className="text-xs text-muted-foreground">radio = ostaje; skini kvačicu ako je druga osoba</span>
                 </div>
               </CardContent>
             </Card>
