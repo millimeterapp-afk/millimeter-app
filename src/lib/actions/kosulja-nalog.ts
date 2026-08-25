@@ -23,6 +23,7 @@ export async function createKosuljaNalog(data: {
   cena?: number;
   korekcije: Record<string, number>;                       // delte po meri
   bazneMere?: { letter: string; sr: string; vrednost: number; obim: number }[] | null;
+  mereSaStrane?: { key: string; label: string; base: number | null; delta: number; konacno: number | null }[] | null; // bazne + korekcije
   napomena?: string;
   idempotencyKey?: string;
 }) {
@@ -46,7 +47,7 @@ export async function createKosuljaNalog(data: {
     kroj: data.kroj, velicina: data.velicina, kragna: data.kragna,
     stej: data.stej, spic: data.spic, manzetna: data.manzetna,
     materijal: data.materijal || null, korekcije: data.korekcije,
-    bazneMere: data.bazneMere ?? null,
+    bazneMere: data.bazneMere ?? null, mereSaStrane: data.mereSaStrane ?? null,
   };
 
   let noviId = "";
@@ -102,7 +103,7 @@ export async function createKosuljaNalog(data: {
       collarType: data.kragna,
       cuffType: data.manzetna,
       fitType: sablon,
-      measurementSnapshot: { korekcije: data.korekcije, bazneMere: data.bazneMere ?? null, stej: data.stej, spic: data.spic },
+      measurementSnapshot: { korekcije: data.korekcije, bazneMere: data.bazneMere ?? null, mereSaStrane: data.mereSaStrane ?? null, stej: data.stej, spic: data.spic },
     });
 
     noviId = ord.id;

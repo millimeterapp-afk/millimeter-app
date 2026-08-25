@@ -127,3 +127,37 @@ export function baznaMera(velicina: string) {
     obim: c.half ? row[i] * 2 : row[i], // za grudi/struk/bokovi prikazujemo pun obim
   }));
 }
+
+// Mapiranje Aleksandrovih korekcionih mera → Munro kolona (slovo).
+// ODLUKA (Matej „uradi kako mislis", 25.8): korekcije i limiti su u cm na STVARNU meru
+// (obim). Za grudi/struk/bokovi bazna je obim (½×2). Ako Aleksandar kasnije kaže drugačije,
+// menja se samo ovo mapiranje / semantika.
+export const KOREKCIJA_NA_KOLONU: Record<string, string> = {
+  grudi: "A",         // ½ Chest → obim
+  stomak: "B",        // ½ Waist (struk) → obim
+  bokovi: "C",        // ½ Hip → obim
+  duzina_napred: "F", // Front Length
+  duzina_nazad: "E",  // Back Length
+  biceps: "H",        // Upper Arm
+  podlaktica: "I",    // Fore Arm
+  zglob: "L",         // Cuff (Munro nema zaseban zglob)
+  orukavlje: "G",     // Armhole
+};
+
+export interface KonacnaMera { key: string; label: string; base: number | null; delta: number; konacno: number | null }
+
+// Konačne „mere sa strane" = bazne (obim) + korekcije, za 9 podesivih mera.
+export function konacneMere(velicina: string, korekcije: Record<string, number>): KonacnaMera[] | null {
+  const baza = baznaMera(velicina);
+  if (!baza) return null;
+  const byLetter = new Map(baza.map((b) => [b.letter, b]));
+  return MERE_LIMITI.map((m) => {
+    const col = byLetter.get(KOREKCIJA_NA_KOLONU[m.key]);
+    const base = col ? col.obim : null;
+    const delta = korekcije[m.key] ?? 0;
+    return { key: m.key, label: m.label, base, delta, konacno: base !== null ? base + delta : null };
+  });
+}
+
+// Nepodesive bazne mere (za prikaz uz nalog): rame, dužina rukava, kratak rukav, kragna.
+export const OSTALE_MERE_SLOVA = ["D", "J", "K", "M"] as const;

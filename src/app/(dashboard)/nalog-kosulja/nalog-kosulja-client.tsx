@@ -10,6 +10,7 @@ import { Shirt, AlertTriangle, Check } from "lucide-react";
 import {
   KRAGNE, STEJ_OPCIJE, SPIC_OPCIJE, MANZETNE, KROJEVI,
   MERE_LIMITI, KOMBINOVANO_LIMIT, deltaVanLimita, baznaMera,
+  konacneMere, OSTALE_MERE_SLOVA,
 } from "@/lib/kosulja";
 
 const aktivniKrojevi = KROJEVI.filter((k) => k.aktivan);
@@ -35,6 +36,8 @@ export function NalogKosuljaClient() {
   const kroj = aktivniKrojevi.find((k) => k.id === krojId);
   const baza = krojId === "hol_slim" && velicina ? baznaMera(velicina) : null;
   const num = (k: string) => Number(delte[k] || 0);
+  const korekcijeMap = Object.fromEntries(MERE_LIMITI.map((m) => [m.key, num(m.key)]));
+  const mere = baza ? konacneMere(velicina, korekcijeMap) : null;
   const kombinovanoVanLimita =
     Math.abs(num("orukavlje")) + Math.abs(num("biceps")) > KOMBINOVANO_LIMIT.limit;
   const imaPrekoracenje =
@@ -59,6 +62,7 @@ export function NalogKosuljaClient() {
           cena: Number(cena) || 0,
           korekcije,
           bazneMere: baza,
+          mereSaStrane: mere ?? undefined,
           napomena: napomena || undefined,
           idempotencyKey: idemKey,
         });
@@ -165,47 +169,57 @@ export function NalogKosuljaClient() {
         <CardHeader className="pb-1"><CardTitle className="text-base">Mere i korekcije</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Uneseš korekcije na baznu veličinu (npr. +2 grudi, −2 biceps). Korekcija preko ograničenja se blokira.
+            Bazna veličina + korekcije = konačne mere (cm, pun obim). Korekcija preko ograničenja se blokira —
+            znak da klijentu treba dati veći broj košulje, a ne širiti postojeći.
           </p>
 
-          {baza && (
-            <div className="rounded-md border bg-muted/30 p-3">
-              <p className="text-xs font-medium mb-2">Bazne mere — Hol slim {velicina} (Munro tabela)</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs">
-                {baza.map((m) => (
-                  <div key={m.letter} className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">{m.sr}{m.half ? " (obim)" : ""}</span>
-                    <span className="font-medium">{m.obim} cm</span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-2">
-                Konačne mere (bazne + korekcije) uključujemo čim Aleksandar potvrdi mapiranje naziva i način unosa
-                korekcije (±cm na obim ili na ½).
-              </p>
+          {!velicina && <p className="text-sm text-muted-foreground">Izaberi veličinu da vidiš mere.</p>}
+
+          {mere && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-muted-foreground border-b">
+                    <th className="text-left py-1 font-medium">Mera</th>
+                    <th className="text-right py-1 font-medium">Bazna</th>
+                    <th className="text-center py-1 font-medium px-2">Korekcija</th>
+                    <th className="text-right py-1 font-medium">Konačna</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mere.map((m) => {
+                    const lim = MERE_LIMITI.find((x) => x.key === m.key)!;
+                    const van = deltaVanLimita(m.key, m.delta);
+                    return (
+                      <tr key={m.key} className="border-b last:border-0">
+                        <td className="py-1.5">{m.label}{lim.limit !== null && <span className="text-[10px] text-muted-foreground"> (±{lim.limit})</span>}</td>
+                        <td className="text-right tabular-nums text-muted-foreground">{m.base ?? "—"}</td>
+                        <td className="text-center px-2">
+                          <input type="number" value={delte[m.key] ?? ""} onChange={(e) => setDelta(m.key, e.target.value)} placeholder="0"
+                            className={`w-16 border rounded px-2 py-1 text-sm text-center bg-white focus:outline-none focus:ring-2 ${van ? "border-red-400 focus:ring-red-400" : "focus:ring-black"}`} />
+                        </td>
+                        <td className={`text-right tabular-nums font-semibold ${van ? "text-red-600" : m.delta !== 0 ? "text-black" : "text-muted-foreground"}`}>{m.konacno ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-            {MERE_LIMITI.map((m) => {
-              const d = num(m.key);
-              const van = deltaVanLimita(m.key, d);
-              return (
-                <div key={m.key}>
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-muted-foreground">{m.label}</label>
-                    <span className="text-[11px] text-muted-foreground">{m.limit === null ? "bez limita" : `± ${m.limit}`}</span>
-                  </div>
-                  <input type="number" value={delte[m.key] ?? ""} onChange={(e) => setDelta(m.key, e.target.value)}
-                    placeholder="0"
-                    className={`mt-1 w-full border rounded-md px-3 py-2 text-sm bg-white h-9 ${van ? "border-red-400 focus:ring-red-400" : "focus:ring-black"} focus:outline-none focus:ring-2`} />
-                  {van && <p className="text-[11px] text-red-600 mt-0.5">Prekoračeno (max ± {m.limit}) — daj veći bazni broj.</p>}
-                </div>
-              );
-            })}
-          </div>
+
+          {mere?.some((m) => deltaVanLimita(m.key, m.delta)) && (
+            <p className="text-xs text-red-600">Neka korekcija je preko ograničenja — daj klijentu veći broj košulje.</p>
+          )}
           {kombinovanoVanLimita && (
             <p className="text-xs text-red-600 flex items-center gap-1">
               <AlertTriangle className="w-3.5 h-3.5" /> Orukavlje + biceps zajedno prekoračuju ± {KOMBINOVANO_LIMIT.limit}.
+            </p>
+          )}
+
+          {baza && (
+            <p className="text-xs text-muted-foreground border-t pt-2">
+              <span className="font-medium">Ostale mere:</span>{" "}
+              {baza.filter((b) => (OSTALE_MERE_SLOVA as readonly string[]).includes(b.letter)).map((b) => `${b.sr} ${b.obim}`).join(" · ")}
             </p>
           )}
         </CardContent>
