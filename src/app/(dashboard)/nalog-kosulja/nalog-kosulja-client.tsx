@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { CustomerPicker } from "@/components/customer-picker";
 import { MaterialPicker } from "@/components/material-picker";
+import { createKosuljaNalog } from "@/lib/actions/kosulja-nalog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shirt, AlertTriangle } from "lucide-react";
+import { Shirt, AlertTriangle, Check } from "lucide-react";
 import {
   KRAGNE, STEJ_OPCIJE, SPIC_OPCIJE, MANZETNE, KROJEVI,
   MERE_LIMITI, KOMBINOVANO_LIMIT, deltaVanLimita, baznaMera,
@@ -23,7 +25,12 @@ export function NalogKosuljaClient() {
   const [manzetna, setManzetna] = useState("");
   const [delte, setDelte] = useState<Record<string, string>>({});
   const [napomena, setNapomena] = useState("");
-  const [pregled, setPregled] = useState<null | Record<string, unknown>>(null);
+  const [cena, setCena] = useState("");
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [idemKey, setIdemKey] = useState(() => crypto.randomUUID());
 
   const kroj = aktivniKrojevi.find((k) => k.id === krojId);
   const baza = krojId === "hol_slim" && velicina ? baznaMera(velicina) : null;
@@ -37,17 +44,34 @@ export function NalogKosuljaClient() {
 
   const setDelta = (k: string, v: string) => setDelte((p) => ({ ...p, [k]: v }));
 
-  const prikaziPregled = () => {
+  const kreiraj = () => {
     if (!validno) return;
-    setPregled({
-      klijent: customer!.label,
-      kroj: kroj?.naziv,
-      velicina,
-      materijal: materijal || "—",
-      kragna: `${kragna} (štej: ${stej}, špic: ${spic})`,
-      manzetna,
-      korekcije: MERE_LIMITI.filter((m) => num(m.key) !== 0).map((m) => `${m.label} ${num(m.key) > 0 ? "+" : ""}${num(m.key)}`),
-      napomena: napomena || "—",
+    setError("");
+    const korekcije: Record<string, number> = {};
+    MERE_LIMITI.forEach((m) => { const d = num(m.key); if (d !== 0) korekcije[m.key] = d; });
+    startTransition(async () => {
+      try {
+        await createKosuljaNalog({
+          customerId: customer!.id,
+          kroj: kroj?.naziv ?? "",
+          velicina, kragna, stej, spic, manzetna,
+          materijal: materijal || undefined,
+          cena: Number(cena) || 0,
+          korekcije,
+          bazneMere: baza,
+          napomena: napomena || undefined,
+          idempotencyKey: idemKey,
+        });
+        setSuccess(true);
+        setCustomer(null); setVelicina(""); setMaterijal(""); setKragna("");
+        setStej(STEJ_OPCIJE[0]); setSpic(SPIC_OPCIJE[0]); setManzetna("");
+        setDelte({}); setNapomena(""); setCena("");
+        setIdemKey(crypto.randomUUID());
+        router.refresh();
+        setTimeout(() => setSuccess(false), 3000);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Greška pri kreiranju naloga.");
+      }
     });
   };
 
@@ -128,6 +152,12 @@ export function NalogKosuljaClient() {
               {MANZETNE.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </div>
+
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Cena (RSD)</label>
+            <input type="number" value={cena} onChange={(e) => setCena(e.target.value)}
+              className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-white h-10 focus:outline-none focus:ring-2 focus:ring-black" placeholder="0" />
+          </div>
         </CardContent>
       </Card>
 
@@ -190,25 +220,17 @@ export function NalogKosuljaClient() {
         </CardContent>
       </Card>
 
-      <button onClick={prikaziPregled} disabled={!validno}
-        className="w-full bg-black text-white rounded-md py-2.5 text-sm font-medium hover:bg-black/80 disabled:opacity-50">
-        Prikaži pregled naloga
-      </button>
-
-      {pregled && (
-        <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-base">Pregled (v1 — još se ne čuva u bazu)</CardTitle></CardHeader>
-          <CardContent className="text-sm space-y-1">
-            <div><span className="text-muted-foreground">Klijent:</span> {String(pregled.klijent)}</div>
-            <div><span className="text-muted-foreground">Kroj / veličina:</span> {String(pregled.kroj)} {String(pregled.velicina)}</div>
-            <div><span className="text-muted-foreground">Materijal:</span> {String(pregled.materijal)}</div>
-            <div><span className="text-muted-foreground">Kragna:</span> {String(pregled.kragna)}</div>
-            <div><span className="text-muted-foreground">Manžetna:</span> {String(pregled.manzetna)}</div>
-            <div><span className="text-muted-foreground">Korekcije:</span> {(pregled.korekcije as string[]).length ? (pregled.korekcije as string[]).join(", ") : "nema"}</div>
-            <div><span className="text-muted-foreground">Napomena:</span> {String(pregled.napomena)}</div>
-          </CardContent>
-        </Card>
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-2 rounded-md flex items-center gap-2">
+          <Check className="w-4 h-4" /> Nalog za košulju je kreiran.
+        </div>
       )}
+      {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{error}</p>}
+
+      <button onClick={kreiraj} disabled={!validno || isPending}
+        className="w-full bg-black text-white rounded-md py-2.5 text-sm font-medium hover:bg-black/80 disabled:opacity-50 flex items-center justify-center gap-2">
+        <Shirt className="w-4 h-4" /> {isPending ? "Čuvanje..." : "Kreiraj nalog"}
+      </button>
     </div>
   );
 }
