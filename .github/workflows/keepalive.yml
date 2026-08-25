@@ -1,12 +1,14 @@
 name: Supabase Keepalive
 
 # Sprečava pauziranje Supabase Free tier projekta (pauzira nakon 7 dana neaktivnosti).
-# Pinguje REST API svaki dan — bilo kakav query resetuje timer pauziranja.
-# Pouzdanije od Vercel Hobby cron-a.
+# Kuca tabelu public.keepalive koju anon SME da čita (jedina takva) — vraća 200 i
+# računa se kao aktivnost. VAŽNO: raniji ping na 'companies' vraćao je 401 (anon je
+# REVOKE-ovan), Supabase to NE broji kao aktivnost, a workflow je ipak bio zelen —
+# zato se projekat pauzirao uprkos "uspešnom" keepalive-u. Sad tražimo tačno 200.
 
 on:
   schedule:
-    - cron: "0 6 * * *" # svaki dan u 06:00 UTC
+    - cron: "0 6,18 * * *" # dvaput dnevno (06:00 i 18:00 UTC) — margina ako GitHub preskoči run
   workflow_dispatch: {} # omogućava ručno pokretanje iz GitHub UI
 
 jobs:
@@ -16,12 +18,12 @@ jobs:
       - name: Ping Supabase REST
         run: |
           CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://zbmjhmvpavojahhnrkzp.supabase.co/rest/v1/companies?select=id&limit=1" \
+            "https://zbmjhmvpavojahhnrkzp.supabase.co/rest/v1/keepalive?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
           echo "Supabase REST odgovorio: HTTP $CODE"
-          if [ "$CODE" = "000" ]; then
-            echo "Greska: baza nedostupna"
+          if [ "$CODE" != "200" ]; then
+            echo "Greska: keepalive nije 200 (dobijeno $CODE) — ping se NE racuna kao aktivnost, projekat moze da se pauzira"
             exit 1
           fi
         env:
