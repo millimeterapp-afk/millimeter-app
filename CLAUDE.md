@@ -924,4 +924,44 @@ repo→Private, Supabase Pro (pred prvi radni dan), Nikolina lozinka, `app.milli
 
 ---
 
-*CLAUDE.md ažuriran: 2026-07-27*
+## 28. Sesija 12–25.8.2026 — pad aplikacije, nalog za košulju kompletiran, pristupi po ulozi
+
+### Pad aplikacije (25.8) — uzrok i rešeno
+- Supabase free-tier se **pauzirao** (7 dana neaktivnosti) → `504 MIDDLEWARE_INVOCATION_TIMEOUT` (middleware zove `supabase.auth.getUser()` na svaki zahtev, visi dok Vercel ne ubije). Vraćeno preko `restore_project` (Supabase MCP), ~108s do UP. Već drugi put (i 11.6).
+- **Uzrok zašto keepalive nije pomogao:** postojeći GitHub Action je kucao `/rest/v1/companies` sa anon ključem, a `anon` je REVOKE-ovan (Codex round-2) → 401, što Supabase NE broji kao aktivnost; workflow je ipak bio zelen (pada samo na HTTP 000). **Fix (`20563c6`):** nova tabela `public.keepalive` (RLS, samo anon SELECT), workflow traži tačno 200 (inače crveno), ide 2x dnevno. Ovo je REZERVA — **pravo rešenje je Supabase Pro, Matej: „to ćemo tek uraditi"**.
+- **MCP pristup vraćen:** Vercel tim „Millimeter APP's projects" (`team_XXjMA4w2zPJCJtvYAIS1G6M8`), Supabase org „Millimeter" (`zbmjhmvpavojahhnrkzp`) — treba biti ulogovan na millimeter nalog u konektoru, ne na drugi Matejev projekat (VamosTamos).
+- Repo je **JAVAN** (public) na GitHub-u — provereno da nema procurelih tajni (`.env.local` nikad tracked, nema connection stringova u kodu; jedini nalaz je Supabase ANON ključ u `keepalive.yml`, javan po dizajnu, anon je REVOKE-ovan pa bezopasan). **Repo → Private još nije urađeno**, i dalje na go-live gate listi.
+
+### Nalog za košulju — POTPUNO ZAVRŠEN (bio glavni fokus sesije)
+Aleksandrov mejl 24.8 (kragne/manžetne/krojevi/ograničenja/pristupi) + `Size-tables_Long-and-short.pdf` (Munro „Long & Short SIZE TABLES", 127 str., poslat naknadno preko WhatsApp-a jer je prvi prilog zaboravio). Matej: „nema šta više da pitamo Aleksandra, uradi kako ti misliš da treba" → sve dovršeno bez čekanja, odluke dokumentovane u kodu:
+- Novi ekran `/nalog-kosulja`, jedan izvor istine `src/lib/kosulja.ts`: 14 kragni (SR/EN) + štej (Standard/+1cm) + špic (privremeno), 5 manžetni, Hol slim 35–46.
+- **VAŽNA GREŠKA I ISPRAVKA (457d110):** prvi put uzeta pogrešna tabela (str.6 = Regular fit) umesto tačne (**str.7 = Slim fit 2.0 = Hol slim**) — Matej: „nemoj nikad više ništa tako polovično da radiš" → ubuduće se ceo dokument/zadatak analizira do kraja pre zaključka (memorija `feedback_no_halfway`).
+- Bazne mere (HOL_SLIM_BAZA) tačno prepisane iz PDF-a, legenda A–M (½Chest/½Waist/½Hip/Shoulder Yoke/Back-Front Length/Armhole/Upper Arm/Fore Arm/Long-Short Sleeve/Cuff/Collar).
+- **Engine konačnih mera (8c41f21):** korekcije/limiti u cm na STVARNU meru (obim; grudi/struk/bokovi bazna=obim×2 jer je Munro ½). Mapiranje: grudi→½Chest, stomak→½Waist(struk), bokovi→½Hip, dužina napred/nazad→Front/Back Length, biceps→Upper Arm, podlaktica→Fore Arm, orukavlje→Armhole, **zglob→Cuff/manžetna** (Munro nema zaseban zglob) — sve su Matejeve odluke, NE Aleksandrova nesigurnost (pazi na formulaciju u porukama klijentu). Forma prikazuje živu tabelu Bazna|Korekcija|Konačna, blokira preko limita (grudi ±4, biceps ±3, podlaktica ±3, orukavlje ±2, orukavlje+biceps ±4 kombinovano).
+- **Čuvanje (5f7a3d8):** `createKosuljaNalog` → order (orderKind=domaca, orderType=custom) + stavka, broj KOS-YYYY-NNNN, snapshot u jsonb, FOR KEY SHARE + idempotency + withTxRetry — ide u Naloge/Produkciju kao svaka domaća.
+- **Materijal-picker na Novi Nalog (f916d22, a3ce28d):** kod domaće proizvodnje polje Artikal JESTE picker materijala (searchMaterials po rečima) — stari skriveni dropdown (filter kategorija Tkanina/Postava) je uvek bio prazan jer materijali imaju brend-kategorije.
+- **Merenja klijenta prošireni na 12 polja** (`src/lib/measurements.ts`, f916d22): vrat/grudi/struk/stomak/bokovi/dužina/rukav/aksla/satla/biceps/podlaktica/zglob.
+- **NE urađeno (Aleksandar sam najavio „šaljem naknadno"):** Olimp/Naš slim/Hol reg veličine (bazni brojevi za Regular i Comfort fit VEĆ izvučeni iz PDF-a, spremni kad zatreba); tačan špic po kragni.
+
+### Pristupi po ulozi — GOTOVO (5fb6845)
+Uloge su postojale u schema/`/settings` (owner, store_manager, store_employee, production_employee, accountant) ali se NISU primenjivale — svako je video sve. Sada: `src/lib/access.ts` (jedan izvor pravila) + `src/lib/access-guard.ts` (`guardSection()`, server redirect na /dashboard) na svih 14 strana + sidebar filtrira linkove po ulozi. Mapiranje: owner=sve, store_manager=lokal+izveštaji, store_employee(radnik)=sve za lokal bez izveštaja/admina, production_employee=Produkcija/Korekcije/Zalihe, accountant=Izveštaji. NIJE gejtovano na nivou pojedinačnih server-akcija (samo strana) — dovoljno za sad po Aleksandrovoj potvrdi.
+**Aplikaciju koriste ISKLJUČIVO zaposleni** — klijenti nemaju login, postoje samo kao podaci u `customers` tabeli.
+**Ostaje:** konkretni nalozi za ljude iz matrice (Nikola Miljković, Miloš Ivanović, Aleksandar, Dimitrije Kršljanin, Nikola Janković, Nemanja Stamenić + profil Proizvodnja + profil Finansije) — pravi se u `/settings`, treba mejlovi+lozinke, radi Matej/Aleksandar (Claude nema kredencijale zaposlenih).
+
+### Duplikati — poboljšano (8c0f34a, c2ebd99)
+Aleksandrovi konkretni primeri (Aleksa Aničić 2 broja, Aleksandar Đurić 4 broja = 2-3 osobe) otkrili rupu: alat je spajao SVE u izabranog, nije mogao da reši „4 broja = 2 osobe". Fix: kvačice po zapisu (biraš KOJI podskup spajaš), dugme „otvori" (profil u novom tabu za brzo poređenje mera/istorije). Objašnjeno Aleksandru odakle brojevi dolaze (iz Excela, NE iz Munra — Munro nema telefon, kači se po imenu).
+
+### Feedback (novo u memoriji)
+- **Plain jezik:** bez smirujućih AI fraza („da te smirim") i bez žargona („radio button" → „izaberi ko ostaje") — i u porukama i u UI labelama.
+- **Nikad polovično:** ceo dokument/zadatak do kraja, ne stati na prvom poklapanju, verifikovati brojevima/kontekstom.
+- Poruke klijentu: pažljivo razdvojiti šta je STVARNO klijent rekao od onoga što je Claude pretpostavio — ne pripisivati Aleksandru nesigurnost koju je zapravo imao Claude.
+
+### Sledeće
+1. Kad Aleksandar pošalje Hol reg/Naš slim/Olimp veličine + špic detalje → brzo ubaciti (baza već spremna).
+2. Nalozi za sve zaposlene u `/settings` (radi Matej/Aleksandar).
+3. Go-live gate i dalje otvoren: repo→Private, Supabase Pro, domen `app.millimeter.rs`.
+4. Razmisliti o minimalnim automatskim testovima (novac/naloge/spajanje) — trenutno 0 testova u repo-u, jedini kvalitet-gate je typecheck+lint+ručni Codex review.
+
+---
+
+*CLAUDE.md ažuriran: 2026-08-25*
