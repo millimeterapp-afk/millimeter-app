@@ -1,7 +1,9 @@
 import { getCompany } from "@/lib/actions/settings";
 import Link from "next/link";
+import { guardSection } from "@/lib/access-guard";
 
 export default async function CompaniesPage() {
+  await guardSection("/companies");
   const company = await getCompany();
 
   return (

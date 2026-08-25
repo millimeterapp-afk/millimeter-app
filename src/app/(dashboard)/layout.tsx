@@ -10,6 +10,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       notifData={notifData}
       userName={profile?.fullName ?? "Korisnik"}
       userEmail={profile?.email ?? ""}
+      userRole={profile?.role ?? null}
     >
       {children}
     </DashboardShell>

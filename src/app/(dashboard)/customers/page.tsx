@@ -1,11 +1,13 @@
 import { getCustomersPage, getCustomerStats } from "@/lib/actions/customers";
 import { CustomersClient } from "./customers-client";
+import { guardSection } from "@/lib/access-guard";
 
 export default async function CustomersPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; page?: string; noPhone?: string }>;
 }) {
+  await guardSection("/customers");
   const params = await searchParams;
   const q = params.q ?? "";
   const page = Number(params.page) || 1;

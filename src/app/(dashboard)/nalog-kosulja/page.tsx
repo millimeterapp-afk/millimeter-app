@@ -1,5 +1,7 @@
 import { NalogKosuljaClient } from "./nalog-kosulja-client";
+import { guardSection } from "@/lib/access-guard";
 
-export default function NalogKosuljaPage() {
+export default async function NalogKosuljaPage() {
+  await guardSection("/nalog-kosulja");
   return <NalogKosuljaClient />;
 }

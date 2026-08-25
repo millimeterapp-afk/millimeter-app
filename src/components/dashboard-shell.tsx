@@ -4,17 +4,20 @@ import { useState } from "react";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import type { NotificationData } from "@/lib/actions/notifications";
+import type { UserRole } from "@/lib/access";
 
 export function DashboardShell({
   children,
   notifData,
   userName,
   userEmail,
+  userRole,
 }: {
   children: React.ReactNode;
   notifData: NotificationData;
   userName: string;
   userEmail: string;
+  userRole?: UserRole | null;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -37,6 +40,7 @@ export function DashboardShell({
         <AppSidebar
           userName={userName}
           userEmail={userEmail}
+          role={userRole}
           onClose={() => setSidebarOpen(false)}
         />
       </div>

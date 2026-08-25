@@ -1,11 +1,13 @@
 import { getMaterials, getInventoryItemsPage, getInventoryStats } from "@/lib/actions/inventory";
 import { InventoryClient } from "./inventory-client";
+import { guardSection } from "@/lib/access-guard";
 
 export default async function InventoryPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
+  await guardSection("/inventory");
   const params = await searchParams;
   const q = params.q ?? "";
   const reqPage = Number(params.page) || 1;

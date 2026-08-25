@@ -3,8 +3,10 @@ import { getCustomerStats, getMunroYears } from "@/lib/actions/customers";
 import { getCorrections } from "@/lib/actions/corrections";
 import { ReportsClient } from "./reports-client";
 import { MunroTopByYear } from "./munro-top-by-year";
+import { guardSection } from "@/lib/access-guard";
 
 export default async function ReportsPage() {
+  await guardSection("/reports");
   const [orders, customerStats, corrections, munroYears] = await Promise.all([
     getNalozi(),
     getCustomerStats(),

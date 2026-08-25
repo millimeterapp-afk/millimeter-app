@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { mozePristup, type UserRole } from "@/lib/access";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -47,14 +48,18 @@ const bottomItems = [
 export function AppSidebar({
   userName,
   userEmail,
+  role,
   onClose,
 }: {
   userName?: string;
   userEmail?: string;
+  role?: UserRole | null;
   onClose?: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const vidljivi = navItems.filter((i) => mozePristup(role, i.href));
+  const vidljiviBottom = bottomItems.filter((i) => mozePristup(role, i.href));
 
   const handleLogout = async () => {
     const { createClient } = await import("@/lib/supabase/client");
@@ -94,7 +99,7 @@ export function AppSidebar({
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
+        {vidljivi.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -118,7 +123,7 @@ export function AppSidebar({
 
       {/* Bottom */}
       <div className="px-3 py-4 border-t space-y-0.5">
-        {bottomItems.map((item) => {
+        {vidljiviBottom.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
           return (
