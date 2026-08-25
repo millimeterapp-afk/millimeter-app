@@ -79,9 +79,11 @@ export function deltaVanLimita(key: string, delta: number): boolean {
   return Math.abs(delta) > m.limit;
 }
 
-// ── BAZNE MERE (Munro Long & Short SIZE TABLES, SHIRT / Slim fit = Hol slim) ────
-// Izvor: PDF „Size-tables_Long-and-short.pdf", strana 6. Vrednosti su TAČNO kako
-// Munro navodi. A/B/C su POLOVINA obima (½) → obim = vrednost ×2. Kolone po slovu:
+// ── BAZNE MERE (Munro Long & Short SIZE TABLES, SHIRT / Slim fit 2.0 = Hol slim) ─
+// Izvor: PDF „Size-tables_Long-and-short.pdf", STRANA 7 (Slim fit 2.0 = Hol slim).
+// PAŽNJA: strana 6 je Regular fit (grudi=struk=bokovi), strana 8 Comfort — NE koristiti
+// za Hol slim. Vrednosti su TAČNO kako Munro navodi. A/B/C su POLOVINA obima (½) →
+// obim = vrednost ×2. Kolone po slovu (M/Collar se isporučuje +1cm zbog skupljanja):
 export interface MunroKolona { letter: string; en: string; sr: string; half: boolean }
 export const MUNRO_SHIRT_COLONE: MunroKolona[] = [
   { letter: "A", en: "½ Chest", sr: "Grudi", half: true },
@@ -101,18 +103,18 @@ export const MUNRO_SHIRT_COLONE: MunroKolona[] = [
 
 // Redovi = veličine 35–46; vrednosti u redosledu kolona A..M gore.
 export const HOL_SLIM_BAZA: Record<string, number[]> = {
-  "35": [48, 48, 48, 42, 76, 67, 39.7, 36.4, 31.5, 63, 23, 23, 35],
-  "36": [50, 50, 50, 43, 76, 67, 41.2, 37.6, 31.9, 63, 23, 23, 36],
-  "37": [52, 52, 52, 44, 76, 67, 42.7, 38.7, 32.3, 63, 23, 23, 37],
-  "38": [54, 54, 54, 45, 76, 67, 44.2, 39.8, 32.8, 63, 23, 23, 38],
-  "39": [56, 56, 56, 46, 80, 70, 45.6, 41.4, 34.6, 65, 25, 25, 39],
-  "40": [58, 58, 58, 47, 80, 70, 47.1, 42.5, 35.0, 65, 25, 25, 40],
-  "41": [60, 60, 60, 48, 80, 70, 48.6, 43.6, 35.4, 65, 25, 25, 41],
-  "42": [62, 62, 62, 49, 80, 70, 50.0, 44.7, 35.9, 65, 25, 25, 42],
-  "43": [64, 64, 64, 50, 80, 70, 51.5, 45.9, 36.3, 65, 25, 25, 43],
-  "44": [66, 66, 66, 51, 80, 70, 53.0, 47.0, 36.7, 65, 25, 25, 44],
-  "45": [68, 68, 68, 52, 84, 73, 54.4, 48.5, 38.5, 67, 27, 27, 45],
-  "46": [70, 70, 70, 53, 84, 73, 55.9, 49.7, 38.9, 67, 27, 27, 46],
+  "35": [46, 40, 44, 42, 76, 67, 34.1, 31.0, 29.4, 63, 23, 22, 35],
+  "36": [48, 42, 46, 43, 76, 67, 35.5, 32.1, 29.9, 63, 23, 22, 36],
+  "37": [50, 44, 48, 44, 76, 67, 37.0, 33.2, 30.3, 63, 23, 22, 37],
+  "38": [52, 46, 50, 45, 76, 67, 38.5, 34.4, 30.7, 63, 23, 22, 38],
+  "39": [54, 48, 52, 46, 80, 70, 39.9, 35.9, 32.5, 65, 25, 24, 39],
+  "40": [56, 50, 54, 47, 80, 70, 41.4, 37.0, 33.0, 65, 25, 24, 40],
+  "41": [58, 52, 56, 48, 80, 70, 42.9, 38.1, 33.4, 65, 25, 24, 41],
+  "42": [60, 54, 58, 49, 80, 70, 44.3, 39.2, 33.8, 65, 25, 24, 42],
+  "43": [62, 56, 60, 50, 80, 70, 45.8, 40.3, 34.3, 65, 25, 24, 43],
+  "44": [64, 58, 62, 51, 80, 70, 47.3, 41.4, 34.7, 65, 25, 24, 44],
+  "45": [66, 60, 64, 52, 84, 73, 48.7, 43.0, 36.5, 67, 27, 26, 45],
+  "46": [68, 62, 66, 53, 84, 73, 50.2, 44.1, 36.9, 67, 27, 26, 46],
 };
 
 // Vraća bazne mere za veličinu kao mapu po slovu, sa obimom (×2 za ½ kolone).
