@@ -78,3 +78,50 @@ export function deltaVanLimita(key: string, delta: number): boolean {
   if (!m || m.limit === null) return false;
   return Math.abs(delta) > m.limit;
 }
+
+// ── BAZNE MERE (Munro Long & Short SIZE TABLES, SHIRT / Slim fit = Hol slim) ────
+// Izvor: PDF „Size-tables_Long-and-short.pdf", strana 6. Vrednosti su TAČNO kako
+// Munro navodi. A/B/C su POLOVINA obima (½) → obim = vrednost ×2. Kolone po slovu:
+export interface MunroKolona { letter: string; en: string; sr: string; half: boolean }
+export const MUNRO_SHIRT_COLONE: MunroKolona[] = [
+  { letter: "A", en: "½ Chest", sr: "Grudi", half: true },
+  { letter: "B", en: "½ Waist", sr: "Struk", half: true },
+  { letter: "C", en: "½ Hip", sr: "Bokovi", half: true },
+  { letter: "D", en: "Shoulder Yoke", sr: "Rame (jaram)", half: false },
+  { letter: "E", en: "Back Length", sr: "Dužina leđa (nazad)", half: false },
+  { letter: "F", en: "Front Length", sr: "Dužina napred", half: false },
+  { letter: "G", en: "Armhole", sr: "Orukavlje", half: false },
+  { letter: "H", en: "Upper Arm", sr: "Biceps (nadlaktica)", half: false },
+  { letter: "I", en: "Fore Arm", sr: "Podlaktica", half: false },
+  { letter: "J", en: "Long Sleeve", sr: "Dugačak rukav", half: false },
+  { letter: "K", en: "Short Sleeve", sr: "Kratak rukav", half: false },
+  { letter: "L", en: "Cuff", sr: "Manžetna", half: false },
+  { letter: "M", en: "Collar", sr: "Kragna", half: false },
+];
+
+// Redovi = veličine 35–46; vrednosti u redosledu kolona A..M gore.
+export const HOL_SLIM_BAZA: Record<string, number[]> = {
+  "35": [48, 48, 48, 42, 76, 67, 39.7, 36.4, 31.5, 63, 23, 23, 35],
+  "36": [50, 50, 50, 43, 76, 67, 41.2, 37.6, 31.9, 63, 23, 23, 36],
+  "37": [52, 52, 52, 44, 76, 67, 42.7, 38.7, 32.3, 63, 23, 23, 37],
+  "38": [54, 54, 54, 45, 76, 67, 44.2, 39.8, 32.8, 63, 23, 23, 38],
+  "39": [56, 56, 56, 46, 80, 70, 45.6, 41.4, 34.6, 65, 25, 25, 39],
+  "40": [58, 58, 58, 47, 80, 70, 47.1, 42.5, 35.0, 65, 25, 25, 40],
+  "41": [60, 60, 60, 48, 80, 70, 48.6, 43.6, 35.4, 65, 25, 25, 41],
+  "42": [62, 62, 62, 49, 80, 70, 50.0, 44.7, 35.9, 65, 25, 25, 42],
+  "43": [64, 64, 64, 50, 80, 70, 51.5, 45.9, 36.3, 65, 25, 25, 43],
+  "44": [66, 66, 66, 51, 80, 70, 53.0, 47.0, 36.7, 65, 25, 25, 44],
+  "45": [68, 68, 68, 52, 84, 73, 54.4, 48.5, 38.5, 67, 27, 27, 45],
+  "46": [70, 70, 70, 53, 84, 73, 55.9, 49.7, 38.9, 67, 27, 27, 46],
+};
+
+// Vraća bazne mere za veličinu kao mapu po slovu, sa obimom (×2 za ½ kolone).
+export function baznaMera(velicina: string) {
+  const row = HOL_SLIM_BAZA[velicina];
+  if (!row) return null;
+  return MUNRO_SHIRT_COLONE.map((c, i) => ({
+    ...c,
+    vrednost: row[i],
+    obim: c.half ? row[i] * 2 : row[i], // za grudi/struk/bokovi prikazujemo pun obim
+  }));
+}

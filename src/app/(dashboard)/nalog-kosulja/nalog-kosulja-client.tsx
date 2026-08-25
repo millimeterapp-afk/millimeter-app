@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shirt, AlertTriangle } from "lucide-react";
 import {
   KRAGNE, STEJ_OPCIJE, SPIC_OPCIJE, MANZETNE, KROJEVI,
-  MERE_LIMITI, KOMBINOVANO_LIMIT, deltaVanLimita,
+  MERE_LIMITI, KOMBINOVANO_LIMIT, deltaVanLimita, baznaMera,
 } from "@/lib/kosulja";
 
 const aktivniKrojevi = KROJEVI.filter((k) => k.aktivan);
@@ -26,6 +26,7 @@ export function NalogKosuljaClient() {
   const [pregled, setPregled] = useState<null | Record<string, unknown>>(null);
 
   const kroj = aktivniKrojevi.find((k) => k.id === krojId);
+  const baza = krojId === "hol_slim" && velicina ? baznaMera(velicina) : null;
   const num = (k: string) => Number(delte[k] || 0);
   const kombinovanoVanLimita =
     Math.abs(num("orukavlje")) + Math.abs(num("biceps")) > KOMBINOVANO_LIMIT.limit;
@@ -134,9 +135,26 @@ export function NalogKosuljaClient() {
         <CardHeader className="pb-1"><CardTitle className="text-base">Mere i korekcije</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Uneseš korekcije na baznu veličinu (npr. +2 grudi, −2 biceps). Bazne mere po veličini i konačan
-            rezultat prikazujemo kad ubacimo Munro tabelu. Korekcija preko ograničenja se blokira.
+            Uneseš korekcije na baznu veličinu (npr. +2 grudi, −2 biceps). Korekcija preko ograničenja se blokira.
           </p>
+
+          {baza && (
+            <div className="rounded-md border bg-muted/30 p-3">
+              <p className="text-xs font-medium mb-2">Bazne mere — Hol slim {velicina} (Munro tabela)</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                {baza.map((m) => (
+                  <div key={m.letter} className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">{m.sr}{m.half ? " (obim)" : ""}</span>
+                    <span className="font-medium">{m.obim} cm</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Konačne mere (bazne + korekcije) uključujemo čim Aleksandar potvrdi mapiranje naziva i način unosa
+                korekcije (±cm na obim ili na ½).
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             {MERE_LIMITI.map((m) => {
               const d = num(m.key);
