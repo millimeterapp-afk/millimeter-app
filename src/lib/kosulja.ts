@@ -26,10 +26,12 @@ export const KRAGNE: KragnaOpcija[] = [
 export const STEJ_OPCIJE = ["Standard", "+1cm"] as const;
 export type StejOpcija = (typeof STEJ_OPCIJE)[number];
 
-// 2) Špic kragne — Aleksandar: "dužina špica i dodatne opcije stižu detaljno,
-//    verovatno duži špic +1cm ili +2cm, ali još nije precizirano". PRIVREMENO
-//    (potvrditi sa Aleksandrom + moguće različito po kragni).
-export const SPIC_OPCIJE = ["Standard", "Duži +1cm", "Duži +2cm"] as const;
+// 2) Špic kragne. Aleksandrov komentar (28.8, „Beleske po modulima (3)"): dodati
+//    +3 i -1, -2, -3 uz postojeće Standard/+1/+2. "Standard" ostaje prva opcija
+//    (podrazumevana), ostale idu od kraćeg ka dužem.
+export const SPIC_OPCIJE = [
+  "Standard", "Kraći -1cm", "Kraći -2cm", "Kraći -3cm", "Duži +1cm", "Duži +2cm", "Duži +3cm",
+] as const;
 export type SpicOpcija = (typeof SPIC_OPCIJE)[number];
 
 // ── Manžetne (5) ──────────────────────────────────────────────────────────────

@@ -88,9 +88,11 @@ export function NalogKosuljaClient() {
         </p>
       </div>
 
-      <Card>
+      {/* overflow-visible — Card po default-u seče sadržaj (overflow-hidden), pa je padajuća
+          lista rezultata izlazila iseceno/skriveno iza sledeće kartice (Aleksandrov nalaz) */}
+      <Card className="overflow-visible">
         <CardHeader className="pb-3"><CardTitle className="text-base">Klijent</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="overflow-visible">
           <CustomerPicker value={customer} onChange={setCustomer} placeholder="Pretraži klijenta po imenu ili broju..." />
         </CardContent>
       </Card>
