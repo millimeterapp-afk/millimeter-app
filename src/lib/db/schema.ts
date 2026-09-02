@@ -132,7 +132,8 @@ export const materials = pgTable("materials", {
   currentStock: numeric("current_stock", { precision: 10, scale: 2 }).default("0").notNull(),
   reservedStock: numeric("reserved_stock", { precision: 10, scale: 2 }).default("0").notNull(),
   reorderLevel: numeric("reorder_level", { precision: 10, scale: 2 }).default("5"),
-  lastPurchasePrice: numeric("last_purchase_price", { precision: 10, scale: 2 }),
+  lastPurchasePrice: numeric("last_purchase_price", { precision: 10, scale: 2 }), // nabavna
+  salePrice: numeric("sale_price", { precision: 10, scale: 2 }), // prodajna (Aleksandrov komentar R8, 2.9) — za auto-popunu cene na nalogu
   averageCost: numeric("average_cost", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -28,7 +28,7 @@ const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Klijenti", href: "/customers", icon: Users },
   { label: "Termini", href: "/appointments", icon: CalendarDays },
-  { label: "Nalozi", href: "/orders", icon: ClipboardList },
+  { label: "Munro nalog", href: "/orders", icon: ClipboardList },
   { label: "Nalog za košulju", href: "/nalog-kosulja", icon: Shirt },
   { label: "Gotov proizvod", href: "/gotov-proizvod", icon: ShoppingBag },
   { label: "Produkcija", href: "/production", icon: Scissors },

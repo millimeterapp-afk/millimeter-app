@@ -150,7 +150,7 @@ export function OrdersClient({
         </div>
         <Link href="/orders/new"
           className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
-          <Plus className="w-4 h-4" /> Nova porudžbina
+          <Plus className="w-4 h-4" /> Novi Munro nalog
         </Link>
       </div>
 

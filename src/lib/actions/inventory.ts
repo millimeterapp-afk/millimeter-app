@@ -44,6 +44,7 @@ export async function createMaterial(data: {
   unit: string;
   currentStock: number;
   lastPurchasePrice?: number;
+  salePrice?: number;
   reorderLevel?: number;
 }) {
   const { dbUser } = await getCurrentUser();
@@ -59,6 +60,7 @@ export async function createMaterial(data: {
       currentStock: String(data.currentStock),
       reservedStock: "0",
       lastPurchasePrice: data.lastPurchasePrice ? String(data.lastPurchasePrice) : null,
+      salePrice: data.salePrice ? String(data.salePrice) : null,
       reorderLevel: data.reorderLevel != null ? String(data.reorderLevel) : "5",
     })
     .returning();
@@ -102,6 +104,7 @@ export async function updateMaterial(
     category?: string;
     unit?: string;
     lastPurchasePrice?: number | null;
+    salePrice?: number | null;
     reorderLevel?: number | null;
   }
 ) {
@@ -113,6 +116,7 @@ export async function updateMaterial(
   if (data.category !== undefined) updates.category = data.category || null;
   if (data.unit !== undefined) updates.unit = data.unit;
   if (data.lastPurchasePrice !== undefined) updates.lastPurchasePrice = data.lastPurchasePrice != null ? String(data.lastPurchasePrice) : null;
+  if (data.salePrice !== undefined) updates.salePrice = data.salePrice != null ? String(data.salePrice) : null;
   if (data.reorderLevel !== undefined) updates.reorderLevel = data.reorderLevel != null ? String(data.reorderLevel) : null;
   updates.updatedAt = new Date();
 
@@ -170,7 +174,7 @@ export async function searchMaterials(query: string) {
   if (q.length < 1) return [];
   const tokens = q.split(/\s+/).filter(Boolean);
   return db
-    .select({ id: materials.id, name: materials.name, code: materials.code, category: materials.category })
+    .select({ id: materials.id, name: materials.name, code: materials.code, category: materials.category, salePrice: materials.salePrice })
     .from(materials)
     .where(and(
       eq(materials.companyId, dbUser.companyId!),

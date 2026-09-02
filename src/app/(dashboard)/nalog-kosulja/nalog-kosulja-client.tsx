@@ -11,6 +11,7 @@ import {
   KRAGNE, STEJ_OPCIJE, SPIC_OPCIJE, MANZETNE, KROJEVI,
   MERE_LIMITI, KOMBINOVANO_LIMIT, deltaVanLimita, baznaMera,
   konacneMere, OSTALE_MERE_SLOVA,
+  MONOGRAM_MESTO, MONOGRAM_BOJA, MONOGRAM_FONT,
 } from "@/lib/kosulja";
 
 const aktivniKrojevi = KROJEVI.filter((k) => k.aktivan);
@@ -27,6 +28,11 @@ export function NalogKosuljaClient() {
   const [delte, setDelte] = useState<Record<string, string>>({});
   const [napomena, setNapomena] = useState("");
   const [cena, setCena] = useState("");
+  const [inicijali, setInicijali] = useState(false);
+  const [monogramTekst, setMonogramTekst] = useState("");
+  const [monogramMesto, setMonogramMesto] = useState<string>(MONOGRAM_MESTO[0]);
+  const [monogramBoja, setMonogramBoja] = useState<string>(MONOGRAM_BOJA[0]);
+  const [monogramFont, setMonogramFont] = useState<string>(MONOGRAM_FONT[0]);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -63,6 +69,9 @@ export function NalogKosuljaClient() {
           korekcije,
           bazneMere: baza,
           mereSaStrane: mere ?? undefined,
+          monogram: inicijali
+            ? { tekst: monogramTekst, mesto: monogramMesto, boja: monogramBoja, font: monogramFont }
+            : undefined,
           napomena: napomena || undefined,
           idempotencyKey: idemKey,
         });
@@ -70,6 +79,8 @@ export function NalogKosuljaClient() {
         setCustomer(null); setVelicina(""); setMaterijal(""); setKragna("");
         setStej(STEJ_OPCIJE[0]); setSpic(SPIC_OPCIJE[0]); setManzetna("");
         setDelte({}); setNapomena(""); setCena("");
+        setInicijali(false); setMonogramTekst(""); setMonogramMesto(MONOGRAM_MESTO[0]);
+        setMonogramBoja(MONOGRAM_BOJA[0]); setMonogramFont(MONOGRAM_FONT[0]);
         setIdemKey(crypto.randomUUID());
         router.refresh();
         setTimeout(() => setSuccess(false), 3000);
@@ -84,7 +95,7 @@ export function NalogKosuljaClient() {
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2"><Shirt className="w-6 h-6" /> Nalog za košulju</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Domaća proizvodnja. Verzija 1 — opcije i korekcije mera. Bazne mere po veličini i čuvanje u bazu dodajemo uz Munro tabelu.
+          Domaća proizvodnja — kroj, kragna, manžetna, inicijali i mere sa automatskim ograničenjima.
         </p>
       </div>
 
@@ -121,7 +132,10 @@ export function NalogKosuljaClient() {
 
           <div>
             <label className="text-xs font-medium text-muted-foreground">Materijal</label>
-            <MaterialPicker value={materijal} onChange={setMaterijal} />
+            <MaterialPicker value={materijal} onChange={(name, salePrice) => {
+              setMaterijal(name);
+              if (salePrice != null) setCena(String(Math.round(salePrice)));
+            }} />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -157,6 +171,47 @@ export function NalogKosuljaClient() {
               <option value="">—</option>
               {MANZETNE.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={inicijali} onChange={(e) => setInicijali(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 accent-black" />
+              Inicijali
+            </label>
+            {inicijali && (
+              <div className="mt-2 space-y-2 pl-1">
+                <div>
+                  <label className="text-xs text-muted-foreground">Šta piše (inicijali)</label>
+                  <input value={monogramTekst} onChange={(e) => setMonogramTekst(e.target.value)}
+                    placeholder="npr. P.P.  ili  M & P"
+                    className="mt-1 w-full border rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black" />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Mesto</label>
+                    <select value={monogramMesto} onChange={(e) => setMonogramMesto(e.target.value)}
+                      className="mt-1 w-full border rounded-md px-2 py-1.5 text-sm bg-white">
+                      {MONOGRAM_MESTO.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Boja</label>
+                    <select value={monogramBoja} onChange={(e) => setMonogramBoja(e.target.value)}
+                      className="mt-1 w-full border rounded-md px-2 py-1.5 text-sm bg-white">
+                      {MONOGRAM_BOJA.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Font</label>
+                    <select value={monogramFont} onChange={(e) => setMonogramFont(e.target.value)}
+                      className="mt-1 w-full border rounded-md px-2 py-1.5 text-sm bg-white">
+                      {MONOGRAM_FONT.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

@@ -1,82 +1,18 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect, useRef } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPurchase } from "@/lib/actions/purchases";
 import { searchCustomersLite } from "@/lib/actions/customers";
-import { searchMaterials } from "@/lib/actions/inventory";
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2, ChevronDown, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import type { Customer, InventoryItem } from "@/lib/db/schema";
+import type { Customer } from "@/lib/db/schema";
 
-// Picker materijala — traži se na serveru (2.000+ ih je), pa nema smisla sve slati u browser.
-// Aleksandrov komentar #2: kod domaće proizvodnje polje materijala mora da nudi materijale iz baze
-// (Getzner, Albini, Carpi…), a ne prazan dropdown ili slobodan unos.
-function MaterialPicker({ value, onChange }: { value: string; onChange: (name: string) => void }) {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<{ id: string; name: string; code: string | null; category: string | null }[]>([]);
-  const [open, setOpen] = useState(false);
-  const [, startSearch] = useTransition();
-  const ridRef = useRef(0);
-
-  useEffect(() => {
-    const query = q.trim();
-    if (!query) return; // prazan upit — ne diramo state sinhrono (render se čuva q.trim() uslovom)
-    const rid = ++ridRef.current;
-    const t = setTimeout(() => {
-      startSearch(async () => {
-        const r = await searchMaterials(query);
-        if (ridRef.current === rid) setResults(r);
-      });
-    }, 300);
-    return () => clearTimeout(t);
-  }, [q]);
-
-  if (value) {
-    return (
-      <div className="mt-1 flex items-center justify-between border rounded-md px-3 py-2 bg-white">
-        <span className="text-sm">{value}</span>
-        <button type="button" onClick={() => { onChange(""); setQ(""); }}
-          className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
-      </div>
-    );
-  }
-  return (
-    <div className="mt-1 relative">
-      <input value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
-        className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
-        placeholder="Pretraži materijal (npr. Carpi 400/70, Getzner)..." />
-      {open && q.trim() && results.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto border rounded-md bg-white shadow-lg">
-          {results.map((m) => (
-            <button key={m.id} type="button"
-              onClick={() => { onChange(m.name); setQ(""); setResults([]); setOpen(false); }}
-              className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0">
-              <p className="text-sm">{m.name}</p>
-              <p className="text-xs text-muted-foreground">{m.category ?? "—"}{m.code ? ` · ${m.code}` : ""}</p>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const steps = ["Klijent", "Nalozi", "Avans i potvrda"];
-
-type OrderKind = "domaca" | "munro" | "gotov";
-
-const kindLabels: Record<OrderKind, string> = {
-  domaca: "Domaća proizvodnja",
-  munro: "Munro",
-  gotov: "Gotov proizvod",
-};
-const kindHint: Record<OrderKind, string> = {
-  domaca: "rok 10-15 radnih dana",
-  munro: "rok 4-6 nedelja",
-  gotov: "gotova roba / usluga",
-};
+// Aleksandrov komentar R6 (Beleske po modulima (4), 2.9): Nalog za košulju i Gotov
+// proizvod su dobili svoje zasebne ekrane, pa ovaj čarobnjak (nekad "Nalozi" sa izborom
+// domaća/munro/gotov) sad služi SAMO za Munro nalog — otud i preimenovanje u sidebar-u.
+const steps = ["Klijent", "Nalog", "Avans i potvrda"];
 
 // Munro vrste komada (Aleksandrov spisak). Dizajn opcije se biraju u Munru,
 // ne kod nas — njihov sistem ne dopušta kreiranje naloga spolja (v. CLAUDE.md §16/§24).
@@ -85,11 +21,10 @@ const MUNRO_ARTIKLI = [
   "Košulja", "Knit", "Obuća", "Aksesoar",
 ];
 
-// Auto-predlog roka po tipu (dana od danas)
-const kindRokDana: Record<OrderKind, number> = { domaca: 15, munro: 42, gotov: 7 };
-function rokZaKind(kind: OrderKind): string {
+const MUNRO_ROK_DANA = 42; // ~4-6 nedelja
+function noviRok(): string {
   const d = new Date();
-  d.setDate(d.getDate() + kindRokDana[kind]);
+  d.setDate(d.getDate() + MUNRO_ROK_DANA);
   return d.toISOString().split("T")[0];
 }
 
@@ -97,41 +32,21 @@ interface Item {
   artikal: string;
   quantity: number;
   unitPrice: string;
-  material: string;
-  collarType: string;
-  cuffType: string;
-  templateType: string;
-  templateSize: string;
-  monogram: boolean;
-  monogramText: string;
-  monogramPosition: string;
-  monogramColor: string;
-  monogramFont: string;
-  showDetails: boolean;
 }
 interface Nalog {
-  orderKind: OrderKind;
   dueDate: string;
   notes: string;
   items: Item[];
 }
 
 function emptyItem(): Item {
-  return {
-    artikal: "", quantity: 1, unitPrice: "", material: "",
-    collarType: "Klasična", cuffType: "Jednostruka",
-    templateType: "", templateSize: "",
-    monogram: false, monogramText: "", monogramPosition: "Štej", monogramColor: "", monogramFont: "Pisano",
-    showDetails: false,
-  };
+  return { artikal: "", quantity: 1, unitPrice: "" };
 }
-function emptyNalog(kind: OrderKind = "domaca"): Nalog {
-  return { orderKind: kind, dueDate: rokZaKind(kind), notes: "", items: [emptyItem()] };
+function emptyNalog(): Nalog {
+  return { dueDate: noviRok(), notes: "", items: [emptyItem()] };
 }
 
-export function NewOrderClient({
-  inventoryItems,
-}: { inventoryItems: InventoryItem[] }) {
+export function NewOrderClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedCustomerId = searchParams.get("customerId") ?? "";
@@ -181,8 +96,6 @@ export function NewOrderClient({
   // — Mutacije naloga/stavki —
   const updateNalog = (ni: number, patch: Partial<Nalog>) =>
     setNalozi((prev) => prev.map((n, i) => (i === ni ? { ...n, ...patch } : n)));
-  const setKind = (ni: number, kind: OrderKind) =>
-    updateNalog(ni, { orderKind: kind, dueDate: rokZaKind(kind) });
   const addNalog = () => setNalozi((prev) => [...prev, emptyNalog()]);
   const removeNalog = (ni: number) => setNalozi((prev) => prev.filter((_, i) => i !== ni));
   const addItem = (ni: number) =>
@@ -206,21 +119,13 @@ export function NewOrderClient({
           notes: purchaseNotes || undefined,
           idempotencyKey,
           nalozi: nalozi.map((n) => ({
-            orderKind: n.orderKind,
+            orderKind: "munro" as const,
             dueDate: n.dueDate || undefined,
             notes: n.notes || undefined,
             items: n.items.map((it) => ({
               artikal: it.artikal,
               quantity: it.quantity,
               unitPrice: Number(it.unitPrice) || 0,
-              material: it.material || undefined,
-              templateNumber: (it.templateType && it.templateSize) ? `${it.templateType} ${it.templateSize}` : undefined,
-              collarType: n.orderKind === "domaca" ? it.collarType : undefined,
-              cuffType: n.orderKind === "domaca" ? it.cuffType : undefined,
-              fitType: (it.templateType && it.templateSize) ? `${it.templateType} / ${it.templateSize}` : undefined,
-              monogramData: it.monogram
-                ? { tekst: it.monogramText, pozicija: it.monogramPosition, boja: it.monogramColor, font: it.monogramFont }
-                : undefined,
             })),
           })),
         });
@@ -239,8 +144,8 @@ export function NewOrderClient({
       </Link>
 
       <div>
-        <h1 className="text-2xl font-semibold">Nova porudžbina</h1>
-        <p className="text-muted-foreground text-sm mt-1">Jedan dolazak klijenta — jedan ili više naloga</p>
+        <h1 className="text-2xl font-semibold">Novi Munro nalog</h1>
+        <p className="text-muted-foreground text-sm mt-1">Mere i dizajn detalje unosiš u Munru — ovde samo klijent, artikli i avans.</p>
       </div>
 
       {/* Progress */}
@@ -312,18 +217,6 @@ export function NewOrderClient({
                 )}
               </div>
 
-              {/* Tip naloga */}
-              <div className="grid grid-cols-3 gap-2">
-                {(["domaca", "munro", "gotov"] as OrderKind[]).map((k) => (
-                  <button key={k} type="button" onClick={() => setKind(ni, k)}
-                    className={`py-2 px-2 rounded-md border text-xs font-medium transition-colors text-center
-                      ${nalog.orderKind === k ? "border-black bg-black text-white" : "border-muted bg-white hover:bg-muted/50"}`}>
-                    <div>{kindLabels[k]}</div>
-                    <div className={`text-[10px] mt-0.5 ${nalog.orderKind === k ? "text-white/70" : "text-muted-foreground"}`}>{kindHint[k]}</div>
-                  </button>
-                ))}
-              </div>
-
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Rok isporuke</label>
                 <Input type="date" value={nalog.dueDate} onChange={(e) => updateNalog(ni, { dueDate: e.target.value })} className="mt-1" />
@@ -335,28 +228,14 @@ export function NewOrderClient({
                   <div key={ii} className="border rounded-lg p-3 space-y-3 bg-muted/20">
                     <div className="flex items-start gap-2">
                       <div className="flex-1">
-                        <label className="text-xs font-medium text-muted-foreground">
-                          {nalog.orderKind === "domaca" ? "Artikal (materijal) *" : "Artikal *"}
-                        </label>
-                        {nalog.orderKind === "munro" ? (
-                          // Munro: bira se vrsta komada. Dizajn detalji se unose u Munru, ne kod nas.
-                          <select value={it.artikal}
-                            onChange={(e) => updateItem(ni, ii, { artikal: e.target.value })}
-                            className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
-                            <option value="">— Izaberi vrstu —</option>
-                            {MUNRO_ARTIKLI.map((a) => <option key={a} value={a}>{a}</option>)}
-                          </select>
-                        ) : nalog.orderKind === "domaca" ? (
-                          // Domaća proizvodnja (košulja): artikal JESTE materijal — bira se iz baze
-                          // materijala (Aleksandrov komentar #2). Isti izbor puni i polje materijala.
-                          <MaterialPicker value={it.artikal}
-                            onChange={(name) => updateItem(ni, ii, { artikal: name, material: name })} />
-                        ) : (
-                          <input list="artikli" value={it.artikal}
-                            onChange={(e) => updateItem(ni, ii, { artikal: e.target.value })}
-                            className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white"
-                            placeholder="npr. Falke 10305 2000 / Ukrasno dugme" />
-                        )}
+                        <label className="text-xs font-medium text-muted-foreground">Artikal *</label>
+                        {/* Bira se vrsta komada. Dizajn detalji se unose u Munru, ne kod nas. */}
+                        <select value={it.artikal}
+                          onChange={(e) => updateItem(ni, ii, { artikal: e.target.value })}
+                          className="w-full mt-1 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black bg-white">
+                          <option value="">— Izaberi vrstu —</option>
+                          {MUNRO_ARTIKLI.map((a) => <option key={a} value={a}>{a}</option>)}
+                        </select>
                       </div>
                       {nalog.items.length > 1 && (
                         <button onClick={() => removeItem(ni, ii)} className="mt-6 text-muted-foreground hover:text-red-600">
@@ -377,90 +256,9 @@ export function NewOrderClient({
                       </div>
                     </div>
 
-                    {/* Munro: detalji se unose kod njih, ne kod nas */}
-                    {nalog.orderKind === "munro" && (
-                      <p className="text-xs text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-1.5">
-                        Mere i dizajn detalje unosiš u Munru. Posle kreiranja naloga imaš dugme „Otvori u GoCreate&rdquo;.
-                      </p>
-                    )}
-
-                    {/* Krojački detalji — samo za domaću proizvodnju */}
-                    {nalog.orderKind === "domaca" && (
-                      <>
-                        <button onClick={() => updateItem(ni, ii, { showDetails: !it.showDetails })}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${it.showDetails ? "rotate-180" : ""}`} />
-                          Krojački detalji (kragna, manžetna, šablon, inicijali)
-                        </button>
-                        {it.showDetails && (
-                          <div className="space-y-3 pt-1">
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-xs text-muted-foreground">Kragna</label>
-                                <select value={it.collarType} onChange={(e) => updateItem(ni, ii, { collarType: e.target.value })}
-                                  className="w-full mt-1 border rounded-md px-2 py-1.5 text-sm bg-white">
-                                  {["Klasična", "Talijanska", "Button-down", "Mao", "Windsor"].map((o) => <option key={o}>{o}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="text-xs text-muted-foreground">Manžetna</label>
-                                <select value={it.cuffType} onChange={(e) => updateItem(ni, ii, { cuffType: e.target.value })}
-                                  className="w-full mt-1 border rounded-md px-2 py-1.5 text-sm bg-white">
-                                  {["Jednostruka", "Dupla", "Francuska"].map((o) => <option key={o}>{o}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="text-xs text-muted-foreground">Šablon</label>
-                                <select value={it.templateType} onChange={(e) => updateItem(ni, ii, { templateType: e.target.value, templateSize: "" })}
-                                  className="w-full mt-1 border rounded-md px-2 py-1.5 text-sm bg-white">
-                                  <option value="">—</option>
-                                  <option>Munro slim</option><option>Naš slim</option><option>Olimp</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="text-xs text-muted-foreground">Veličina</label>
-                                <select value={it.templateSize} onChange={(e) => updateItem(ni, ii, { templateSize: e.target.value })}
-                                  disabled={!it.templateType}
-                                  className="w-full mt-1 border rounded-md px-2 py-1.5 text-sm bg-white disabled:opacity-40">
-                                  <option value="">—</option>
-                                  {it.templateType === "Munro slim" && ["38","39","40","41","42","43","44","45"].map((s) => <option key={s}>{s}</option>)}
-                                  {it.templateType === "Naš slim" && ["38","39","40","41","42","43","44"].map((s) => <option key={s}>{s}</option>)}
-                                  {it.templateType === "Olimp" && ["S","M","L","XL","XXL","XXXL"].map((s) => <option key={s}>{s}</option>)}
-                                </select>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <input type="checkbox" id={`mono-${ni}-${ii}`} checked={it.monogram}
-                                onChange={(e) => updateItem(ni, ii, { monogram: e.target.checked })}
-                                className="w-4 h-4 rounded border-gray-300 accent-black" />
-                              <label htmlFor={`mono-${ni}-${ii}`} className="text-sm">Inicijali</label>
-                            </div>
-                            {it.monogram && (
-                              <div className="space-y-2">
-                                <div>
-                                  <label className="text-xs text-muted-foreground">Šta piše (inicijali)</label>
-                                  <Input value={it.monogramText} onChange={(e) => updateItem(ni, ii, { monogramText: e.target.value })}
-                                    placeholder="npr. P.P.  ili  M & P" className="mt-1 text-sm" />
-                                </div>
-                                <div className="grid grid-cols-3 gap-2">
-                                  <select value={it.monogramPosition} onChange={(e) => updateItem(ni, ii, { monogramPosition: e.target.value })}
-                                    className="border rounded-md px-2 py-1.5 text-sm bg-white">
-                                    {["Štej", "Manžetna", "Prednjica"].map((o) => <option key={o}>{o}</option>)}
-                                  </select>
-                                  <Input value={it.monogramColor} onChange={(e) => updateItem(ni, ii, { monogramColor: e.target.value })} placeholder="Boja" className="text-sm" />
-                                  <select value={it.monogramFont} onChange={(e) => updateItem(ni, ii, { monogramFont: e.target.value })}
-                                    className="border rounded-md px-2 py-1.5 text-sm bg-white">
-                                    {["Pisano", "Štampano — Ćirilica", "Pisano — Latinica", "Štampano — Latinica"].map((o) => <option key={o}>{o}</option>)}
-                                  </select>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
+                    <p className="text-xs text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-1.5">
+                      Mere i dizajn detalje unosiš u Munru. Posle kreiranja naloga imaš dugme „Otvori u GoCreate&rdquo;.
+                    </p>
                   </div>
                 ))}
                 <button onClick={() => addItem(ni)}
@@ -475,11 +273,6 @@ export function NewOrderClient({
             className="w-full flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 text-sm font-medium text-muted-foreground hover:border-black hover:text-black transition-colors">
             <Plus className="w-4 h-4" /> Dodaj još jedan nalog
           </button>
-
-          {/* datalist artikala iz inventara */}
-          <datalist id="artikli">
-            {inventoryItems.map((it) => <option key={it.id} value={it.name} />)}
-          </datalist>
         </div>
       )}
 
@@ -497,7 +290,7 @@ export function NewOrderClient({
               return (
                 <div key={ni} className="bg-muted/30 rounded-lg p-3">
                   <div className="flex justify-between text-sm font-medium">
-                    <span>Nalog {ni + 1} · {kindLabels[n.orderKind]}</span>
+                    <span>Nalog {ni + 1} · Munro</span>
                     <span>RSD {nalogTotal.toLocaleString()}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">Rok: {n.dueDate || "—"}</div>

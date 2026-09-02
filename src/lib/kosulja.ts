@@ -38,6 +38,16 @@ export type SpicOpcija = (typeof SPIC_OPCIJE)[number];
 export const MANZETNE = ["Zakošena", "Zaobljena", "Ravna", "Dupla", "2 u 1"] as const;
 export type Manzetna = (typeof MANZETNE)[number];
 
+// ── Inicijali/monogram (Aleksandrov komentar R7, 2.9) ─────────────────────────
+// Isti obrazac kao ranije u Novom Nalogu, samo preseljen ovamo + preciziran:
+// tekst je slobodan unos (šta piše), mesto/boja/font su padajući meniji.
+export const MONOGRAM_MESTO = ["Štej", "Manžetna", "Prednjica"] as const;
+// Boje konca — Aleksandar: "za sad osnovne, kasnije šalje definitivnu listu (~10ak)".
+export const MONOGRAM_BOJA = ["Crna", "Bela", "Plava", "Zelena", "Crvena"] as const;
+export const MONOGRAM_FONT = [
+  "Ćirilica — pisano", "Ćirilica — štampano", "Latinica — pisano", "Latinica — štampano",
+] as const;
+
 // ── Krojevi ───────────────────────────────────────────────────────────────────
 // Za sada SAMO Hol slim (= Holandski slim = Munro kroj), veličine 35–46
 // (Aleksandar 24.8; NAPOMENA: Nikola je u maju pomenuo 38–45 — nesklad, ide

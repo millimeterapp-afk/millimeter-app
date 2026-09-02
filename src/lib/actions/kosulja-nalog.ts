@@ -24,6 +24,7 @@ export async function createKosuljaNalog(data: {
   korekcije: Record<string, number>;                       // delte po meri
   bazneMere?: { letter: string; sr: string; vrednost: number; obim: number }[] | null;
   mereSaStrane?: { key: string; label: string; base: number | null; delta: number; konacno: number | null }[] | null; // bazne + korekcije
+  monogram?: { tekst: string; mesto: string; boja: string; font: string };
   napomena?: string;
   idempotencyKey?: string;
 }) {
@@ -104,6 +105,9 @@ export async function createKosuljaNalog(data: {
       cuffType: data.manzetna,
       fitType: sablon,
       measurementSnapshot: { korekcije: data.korekcije, bazneMere: data.bazneMere ?? null, mereSaStrane: data.mereSaStrane ?? null, stej: data.stej, spic: data.spic },
+      monogramData: data.monogram
+        ? { tekst: data.monogram.tekst, pozicija: data.monogram.mesto, boja: data.monogram.boja, font: data.monogram.font }
+        : null,
     });
 
     noviId = ord.id;

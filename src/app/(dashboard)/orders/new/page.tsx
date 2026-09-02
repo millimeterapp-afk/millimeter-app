@@ -1,18 +1,12 @@
 import { Suspense } from "react";
-import { getInventoryItems } from "@/lib/actions/inventory";
 import { NewOrderClient } from "./new-order-client";
 
-async function NewOrderContent() {
-  // Klijenti se NE šalju svi u browser (4.000+) — wizard ih traži serverskom pretragom.
-  // Materijali se takođe traže na serveru (2.000+) preko MaterialPicker-a (searchMaterials).
-  const inventoryItems = await getInventoryItems();
-  return <NewOrderClient inventoryItems={inventoryItems} />;
-}
-
+// Sad isključivo Munro nalog (R6, 2.9) — Nalog za košulju i Gotov proizvod imaju svoje
+// ekrane. Klijenti se traže serverskom pretragom (4.000+), ne šalju se svi u browser.
 export default function NewOrderPage() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Učitavanje...</div>}>
-      <NewOrderContent />
+      <NewOrderClient />
     </Suspense>
   );
 }

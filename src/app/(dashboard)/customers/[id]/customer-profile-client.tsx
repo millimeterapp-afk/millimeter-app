@@ -214,7 +214,7 @@ export function CustomerProfileClient({ customer, appointments, munroOrders }: {
             <Pencil className="w-4 h-4" /> {editMode ? "Otkaži" : "Uredi"}
           </button>
           <Link href={`/orders/new?customerId=${customer.id}`} className="text-sm bg-black text-white px-4 py-2 rounded-md hover:bg-black/80 transition-colors">
-            + Novi nalog
+            + Novi Munro nalog
           </Link>
         </div>
       </div>

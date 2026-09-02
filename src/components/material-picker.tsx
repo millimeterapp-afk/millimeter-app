@@ -5,14 +5,16 @@ import { searchMaterials } from "@/lib/actions/inventory";
 import { X } from "lucide-react";
 
 // Pretraga materijala iz baze (2.000+), serverski (searchMaterials, po rečima).
-// Bira se jedan materijal; vrednost je naziv materijala.
+// Bira se jedan materijal; vrednost je naziv materijala. `salePrice` u onChange (ako
+// materijal ima unetu prodajnu cenu) — poziva se sa null kad se cena ne zna (Aleksandrov
+// komentar R8, 2.9: cena da se automatski popuni kad se izabere materijal).
 export function MaterialPicker({ value, onChange, placeholder }: {
   value: string;
-  onChange: (name: string) => void;
+  onChange: (name: string, salePrice?: number | null) => void;
   placeholder?: string;
 }) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<{ id: string; name: string; code: string | null; category: string | null }[]>([]);
+  const [results, setResults] = useState<{ id: string; name: string; code: string | null; category: string | null; salePrice: string | null }[]>([]);
   const [open, setOpen] = useState(false);
   const [, startSearch] = useTransition();
   const ridRef = useRef(0);
@@ -48,10 +50,13 @@ export function MaterialPicker({ value, onChange, placeholder }: {
         <div className="absolute z-20 mt-1 w-full max-h-56 overflow-y-auto border rounded-md bg-white shadow-lg">
           {results.map((m) => (
             <button key={m.id} type="button"
-              onClick={() => { onChange(m.name); setQ(""); setResults([]); setOpen(false); }}
+              onClick={() => { onChange(m.name, m.salePrice != null ? Number(m.salePrice) : null); setQ(""); setResults([]); setOpen(false); }}
               className="w-full text-left px-3 py-2 hover:bg-muted/50 border-b last:border-0">
               <p className="text-sm">{m.name}</p>
-              <p className="text-xs text-muted-foreground">{m.category ?? "—"}{m.code ? ` · ${m.code}` : ""}</p>
+              <p className="text-xs text-muted-foreground">
+                {m.category ?? "—"}{m.code ? ` · ${m.code}` : ""}
+                {m.salePrice != null && ` · RSD ${Number(m.salePrice).toLocaleString("sr-RS")}`}
+              </p>
             </button>
           ))}
         </div>
