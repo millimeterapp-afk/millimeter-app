@@ -31,18 +31,6 @@ function isPaid(n: Nalog) {
   return paymentOf(n) === "paid";
 }
 
-// ─── Tip naloga (Artikal kolona iz Aleksandrovog modela) ──────────────────────
-const kindLabels: Record<string, string> = {
-  domaca: "Domaća",
-  munro: "Munro",
-  gotov: "Gotov proizvod",
-};
-const kindColors: Record<string, string> = {
-  domaca: "bg-blue-100 text-blue-800",
-  munro: "bg-purple-100 text-purple-700",
-  gotov: "bg-emerald-100 text-emerald-700",
-};
-
 // ─── Status naloga (tok kroz proizvodnju) ─────────────────────────────────────
 const nalogStatusLabels: Record<string, string> = {
   naruceno: "Naručeno",
@@ -84,9 +72,19 @@ const PAGE_SIZE = 25;
 export function OrdersClient({
   nalozi,
   initialFilter,
+  title = "Munro nalog",
+  subtitleExtra = " · Nalozi za košulju su na svom ekranu",
+  newHref = "/orders/new",
+  newLabel = "Novi Munro nalog",
+  showNewButton = true,
 }: {
   nalozi: Nalog[];
   initialFilter?: string;
+  title?: string;
+  subtitleExtra?: string;
+  newHref?: string;
+  newLabel?: string;
+  showNewButton?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialFilter ?? "all");
@@ -145,13 +143,15 @@ export function OrdersClient({
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">Nalozi</h1>
-          <p className="text-muted-foreground text-sm mt-1">{nalozi.length} ukupno naloga</p>
+          <h1 className="text-2xl font-semibold">{title}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{nalozi.length} ukupno naloga{subtitleExtra}</p>
         </div>
-        <Link href="/orders/new"
-          className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
-          <Plus className="w-4 h-4" /> Novi Munro nalog
-        </Link>
+        {showNewButton && (
+          <Link href={newHref}
+            className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 transition-colors">
+            <Plus className="w-4 h-4" /> {newLabel}
+          </Link>
+        )}
       </div>
 
       {/* Status tabs */}
@@ -193,7 +193,6 @@ export function OrdersClient({
               <tr className="border-b bg-muted/50">
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Nalog</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Klijent</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Tip</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Rok</th>
                 <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Iznos</th>
@@ -216,11 +215,6 @@ export function OrdersClient({
                           {customer.firstName} {customer.lastName}
                         </Link>
                       ) : <span className="text-sm text-muted-foreground">—</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${kindColors[n.orderKind] ?? "bg-muted"}`}>
-                        {kindLabels[n.orderKind] ?? n.orderKind}
-                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${nalogStatusColors[n.nalogStatus] ?? "bg-gray-100"}`}>

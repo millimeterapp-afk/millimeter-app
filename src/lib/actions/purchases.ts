@@ -243,10 +243,15 @@ export async function getPayments() {
 // Radnici u radnji prate status svakog naloga posebno (Aleksandrov zahtjev:
 // "200 košulja... da svako zna dokle je stigla koja"). Vraća naloge sa stavkama,
 // klijentom i porudžbinom (radi avansa/plaćanja na nivou porudžbine).
-export async function getNalozi() {
+// `kind` filtrira po tipu naloga (Aleksandrov komentar 2.9: lista /orders da bude
+// samo Munro; nalozi za košulju se prikazuju na /nalog-kosulja).
+export async function getNalozi(kind?: "domaca" | "munro" | "gotov") {
   const { dbUser } = await getCurrentUser();
   return db.query.orders.findMany({
-    where: (o, { eq }) => eq(o.companyId, dbUser.companyId!),
+    where: (o, { eq, and }) =>
+      kind
+        ? and(eq(o.companyId, dbUser.companyId!), eq(o.orderKind, kind))
+        : eq(o.companyId, dbUser.companyId!),
     with: {
       customer: true,
       items: true,

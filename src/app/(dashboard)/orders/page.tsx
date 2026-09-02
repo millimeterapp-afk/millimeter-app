@@ -9,7 +9,7 @@ export default async function OrdersPage({
 }) {
   await guardSection("/orders");
   const [nalozi, params] = await Promise.all([
-    getNalozi(),
+    getNalozi("munro"),
     searchParams,
   ]);
   return <OrdersClient nalozi={nalozi} initialFilter={params.filter} />;

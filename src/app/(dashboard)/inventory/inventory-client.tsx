@@ -7,16 +7,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { AlertTriangle, Plus, X, ArrowDown, Search, Pencil, Upload } from "lucide-react";
 import type { Material, InventoryItem } from "@/lib/db/schema";
+import type { UserRole } from "@/lib/access";
 
-export function InventoryClient({ materials, items, total, stats, q, page }: {
+export function InventoryClient({ materials, items, total, stats, q, page, userRole }: {
   materials: Material[];
   items: InventoryItem[];
   total: number;
   stats: { itemCount: number; itemStockValue: number };
   q: string;
   page: number;
+  userRole?: UserRole | null;
 }) {
   const router = useRouter();
+  const isOwner = userRole === "owner";
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<"materials" | "items">("materials");
   const [search, setSearch] = useState(q);
@@ -24,10 +27,10 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
   const [showReceive, setShowReceive] = useState<Material | null>(null);
   const [showReceiveItem, setShowReceiveItem] = useState<InventoryItem | null>(null);
   const [editMaterial, setEditMaterial] = useState<Material | null>(null);
-  const [editMatForm, setEditMatForm] = useState({ name: "", code: "", category: "", unit: "m", price: "", reorderLevel: "" });
+  const [editMatForm, setEditMatForm] = useState({ name: "", code: "", category: "", unit: "m", price: "", salePrice: "", reorderLevel: "" });
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [editItemForm, setEditItemForm] = useState({ name: "", sku: "", category: "", salePrice: "", costPrice: "" });
-  const [matForm, setMatForm] = useState({ name: "", code: "", category: "Tkanina", unit: "m", price: "", stock: "", reorderLevel: "5" });
+  const [matForm, setMatForm] = useState({ name: "", code: "", category: "Tkanina", unit: "m", price: "", salePrice: "", stock: "", reorderLevel: "5" });
   const [itemForm, setItemForm] = useState({ name: "", sku: "", category: "Gotova roba", quantity: "", salePrice: "", costPrice: "" });
   const [receiveQty, setReceiveQty] = useState("");
   const [receiveNote, setReceiveNote] = useState("");
@@ -66,10 +69,11 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
         unit: matForm.unit,
         currentStock: Number(matForm.stock),
         lastPurchasePrice: matForm.price ? Number(matForm.price) : undefined,
+        salePrice: isOwner && matForm.salePrice ? Number(matForm.salePrice) : undefined,
         reorderLevel: matForm.reorderLevel ? Number(matForm.reorderLevel) : 5,
       });
       setShowAdd(false);
-      setMatForm({ name: "", code: "", category: "Tkanina", unit: "m", price: "", stock: "", reorderLevel: "5" });
+      setMatForm({ name: "", code: "", category: "Tkanina", unit: "m", price: "", salePrice: "", stock: "", reorderLevel: "5" });
       router.refresh();
     });
   };
@@ -82,6 +86,7 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
       category: m.category ?? "",
       unit: m.unit,
       price: m.lastPurchasePrice ?? "",
+      salePrice: m.salePrice ?? "",
       reorderLevel: m.reorderLevel ?? "5",
     });
   };
@@ -96,6 +101,7 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
         category: editMatForm.category || undefined,
         unit: editMatForm.unit,
         lastPurchasePrice: editMatForm.price ? Number(editMatForm.price) : null,
+        ...(isOwner ? { salePrice: editMatForm.salePrice ? Number(editMatForm.salePrice) : null } : {}),
         reorderLevel: editMatForm.reorderLevel ? Number(editMatForm.reorderLevel) : null,
       });
       setEditMaterial(null);
@@ -339,6 +345,13 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
                   <Input type="number" value={editMatForm.reorderLevel} onChange={(e) => setEditMatForm({ ...editMatForm, reorderLevel: e.target.value })} className="mt-1" placeholder="5" min="0" step="0.5" />
                 </div>
               </div>
+              {isOwner && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Prodajna cena (RSD )</label>
+                  <Input type="number" value={editMatForm.salePrice} onChange={(e) => setEditMatForm({ ...editMatForm, salePrice: e.target.value })} className="mt-1" placeholder="0" />
+                  <p className="text-xs text-muted-foreground mt-0.5">Ova cena se automatski nudi kod pravljenja naloga (npr. Nalog za košulju).</p>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
                 Notifikacija &quot;Niske zalihe&quot; se prikazuje kada je slobodna količina ispod minimalnog nivoa.
               </p>
@@ -453,6 +466,10 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
                     <p className="text-xs text-muted-foreground mt-0.5">Upozorenje ispod ovog nivoa</p>
                   </div>
                 </div>
+                {isOwner && (
+                  <div><label className="text-xs font-medium text-muted-foreground">Prodajna cena (RSD )</label>
+                    <Input type="number" value={matForm.salePrice} onChange={(e) => setMatForm({ ...matForm, salePrice: e.target.value })} className="mt-1" placeholder="0" /></div>
+                )}
                 <div className="flex gap-2 pt-2">
                   <button type="button" onClick={() => setShowAdd(false)} className="flex-1 border rounded-md py-2 text-sm hover:bg-muted">Otkaži</button>
                   <button type="submit" disabled={isPending} className="flex-1 bg-black text-white rounded-md py-2 text-sm hover:bg-black/80 disabled:opacity-50">
@@ -505,6 +522,7 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
                   <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Slobodno</th>
                   <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Min. nivo</th>
                   <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Cena/jed.</th>
+                  <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Prodajna</th>
                   <th className="text-right text-xs font-medium text-muted-foreground px-4 py-3">Akcija</th>
                 </tr>
               </thead>
@@ -542,6 +560,9 @@ export function InventoryClient({ materials, items, total, stats, q, page }: {
                       </td>
                       <td className="px-4 py-3 text-sm text-right text-muted-foreground">
                         {item.lastPurchasePrice ? `RSD ${item.lastPurchasePrice}/${item.unit}` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-medium">
+                        {item.salePrice ? `RSD ${Number(item.salePrice).toLocaleString()}/${item.unit}` : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center gap-1 justify-end">

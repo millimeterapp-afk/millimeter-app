@@ -48,6 +48,10 @@ export async function createMaterial(data: {
   reorderLevel?: number;
 }) {
   const { dbUser } = await getCurrentUser();
+  // Aleksandar (2.9): samo vlasnici postavljaju prodajnu cenu materijala.
+  if (data.salePrice !== undefined && dbUser.role !== "owner") {
+    throw new Error("Samo vlasnik može postaviti prodajnu cenu materijala.");
+  }
 
   const [material] = await db
     .insert(materials)
@@ -109,6 +113,10 @@ export async function updateMaterial(
   }
 ) {
   const { dbUser } = await getCurrentUser();
+  // Aleksandar (2.9): samo vlasnici menjaju prodajnu cenu materijala.
+  if (data.salePrice !== undefined && dbUser.role !== "owner") {
+    throw new Error("Samo vlasnik može promeniti prodajnu cenu materijala.");
+  }
 
   const updates: Record<string, unknown> = {};
   if (data.name !== undefined) updates.name = data.name;
