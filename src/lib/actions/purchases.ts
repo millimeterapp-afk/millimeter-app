@@ -8,6 +8,7 @@ import { calcLoyaltyTier } from "@/lib/loyalty";
 import { eq, and, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
+import { recalcPurchaseTotalsSql } from "@/lib/db/recalc-purchase";
 
 // ─── Auth helper ────────────────────────────────────────────────────────────
 async function getCurrentUser() {
@@ -291,25 +292,6 @@ export async function getPurchase(id: string) {
     },
   });
 }
-
-// ─── Preračun ukupnog porudžbine ──────────────────────────────────────────────
-// Ukupno = zbir naloga koji NISU otkazani. Ponovo izračuna i status plaćanja.
-// Jedna atomarna izjava — koristi se u više akcija (otkazivanje naloga, izmjena stavki).
-export const recalcPurchaseTotalsSql = (purchaseId: string, companyId: string) => sql`
-  WITH t AS (
-    SELECT COALESCE(SUM(total_amount), 0) AS total
-    FROM orders WHERE purchase_id = ${purchaseId} AND company_id = ${companyId} AND nalog_status <> 'otkazano'
-  )
-  UPDATE purchases p
-  SET total_amount = t.total,
-      payment_status = CASE
-        WHEN p.paid_amount >= t.total AND t.total > 0 THEN 'paid'
-        WHEN p.paid_amount > 0 THEN 'avans'
-        ELSE 'unpaid' END,
-      updated_at = now()
-  FROM t
-  WHERE p.id = ${purchaseId} AND p.company_id = ${companyId}
-`;
 
 // ─── updateNalogStatus — pomjeri nalog kroz tok ───────────────────────────────
 const NALOG_STATUSES = [

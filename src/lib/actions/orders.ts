@@ -9,7 +9,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { withTxRetry } from "@/lib/db-retry";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
-import { recalcPurchaseTotalsSql } from "@/lib/actions/purchases";
+import { recalcPurchaseTotalsSql } from "@/lib/db/recalc-purchase";
 
 async function getCurrentUser() {
   const { user, dbUser } = await requireActiveUser();
