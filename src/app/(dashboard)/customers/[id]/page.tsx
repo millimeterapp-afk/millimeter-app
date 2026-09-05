@@ -3,8 +3,10 @@ import { getCustomerAppointments } from "@/lib/actions/appointments";
 import { getGoCreateOrders } from "@/lib/gocreate";
 import { notFound } from "next/navigation";
 import { CustomerProfileClient } from "./customer-profile-client";
+import { guardSection } from "@/lib/access-guard";
 
 export default async function CustomerProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  await guardSection("/customers");
   const { id } = await params;
   const [customer, appointments] = await Promise.all([
     getCustomer(id),

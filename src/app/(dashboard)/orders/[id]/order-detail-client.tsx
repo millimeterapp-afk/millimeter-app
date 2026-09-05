@@ -12,6 +12,7 @@ import { ArrowLeft, User, Printer, Check, CreditCard, AlertCircle, X, Wrench, Pe
 import Link from "next/link";
 import type { Order, Customer, CustomerMeasurement, Correction, OrderItem, Purchase } from "@/lib/db/schema";
 import type { GoCreateOrder } from "@/lib/gocreate";
+import { escapeHtml } from "@/lib/print-safe";
 
 type OrderWithDetails = Order & {
   customer: (Customer & { measurements: CustomerMeasurement[] }) | null;
@@ -335,35 +336,37 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
     const measures = measureData
       ? MEASURE_ORDER
           .filter(k => measureData[k] && measureData[k] !== "—")
-          .map(k => ({ label: MEASURE_LABELS[k] ?? k, value: measureData[k] }))
+          .map(k => ({ label: MEASURE_LABELS[k] ?? k, value: escapeHtml(measureData[k]) }))
       : [];
 
     const hasMonogram = measureData?.monogram_pozicija;
     const specs = [
-      order.collarType ? `Kragna: <strong>${order.collarType}</strong>` : null,
-      order.sleeveType ? `Manžetna: <strong>${order.sleeveType}</strong>` : null,
-      order.fitType    ? `Fit: <strong>${order.fitType}</strong>`         : null,
+      order.collarType ? `Kragna: <strong>${escapeHtml(order.collarType)}</strong>` : null,
+      order.sleeveType ? `Manžetna: <strong>${escapeHtml(order.sleeveType)}</strong>` : null,
+      order.fitType    ? `Fit: <strong>${escapeHtml(order.fitType)}</strong>`         : null,
     ].filter(Boolean).join(" &nbsp;·&nbsp; ");
 
-    // Novi model: naslov i tabela stavki iz order_items
-    const printTitle = order.item
+    // Novi model: naslov i tabela stavki iz order_items. Sve vrednosti iz baze
+    // (napomene, imena, monogram...) su korisnički unos — escape-uju se pre ubacivanja
+    // u HTML, jer document.write ne prolazi kroz Reactovo bezbedno prikazivanje.
+    const printTitle = escapeHtml(order.item
       ?? (order.items.length === 1
         ? order.items[0].artikal
         : order.items.length > 1
           ? `${order.items.length} stavki — ${kindLabels[order.orderKind] ?? "nalog"}`
-          : "Nalog");
+          : "Nalog"));
     const itemRows = order.items.map((it) => {
       const mono = it.monogramData as { tekst?: string; pozicija?: string; boja?: string; font?: string } | null;
       const detalji = [
-        it.material ? `Mat: ${it.material}` : null,
-        it.collarType ? `Kragna: ${it.collarType}` : null,
-        it.cuffType ? `Manž: ${it.cuffType}` : null,
-        it.templateNumber ? `Šablon: ${it.templateNumber}` : null,
-        (mono?.tekst || mono?.pozicija) ? `Inicijali${mono?.tekst ? ` "${mono.tekst}"` : ""}${mono?.pozicija ? ` (${mono.pozicija}${mono?.boja ? `, ${mono.boja}` : ""}${mono?.font ? `, ${mono.font}` : ""})` : ""}` : null,
+        it.material ? `Mat: ${escapeHtml(it.material)}` : null,
+        it.collarType ? `Kragna: ${escapeHtml(it.collarType)}` : null,
+        it.cuffType ? `Manž: ${escapeHtml(it.cuffType)}` : null,
+        it.templateNumber ? `Šablon: ${escapeHtml(it.templateNumber)}` : null,
+        (mono?.tekst || mono?.pozicija) ? `Inicijali${mono?.tekst ? ` "${escapeHtml(mono.tekst)}"` : ""}${mono?.pozicija ? ` (${escapeHtml(mono.pozicija)}${mono?.boja ? `, ${escapeHtml(mono.boja)}` : ""}${mono?.font ? `, ${escapeHtml(mono.font)}` : ""})` : ""}` : null,
       ].filter(Boolean).join(" · ");
       return `<tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:600">${it.artikal}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">${it.quantity}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:600">${escapeHtml(it.artikal)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">${escapeHtml(it.quantity)}</td>
         <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:11px;color:#555">${detalji || "—"}</td>
       </tr>`;
     }).join("");
@@ -447,15 +450,15 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
     <div class="brand-sub">PREMIUM KROJAČNICA · BEOGRAD</div>
   </div>
   <div class="order-meta">
-    <div class="order-num">${order.orderNumber}</div>
-    <div class="order-date">Datum naloga: ${orderDate}</div>
+    <div class="order-num">${escapeHtml(order.orderNumber)}</div>
+    <div class="order-date">Datum naloga: ${escapeHtml(orderDate)}</div>
     <div><span class="flow-badge">${isMunro ? "MUNRO" : "MILLIMETER"} PRODUKCIJA</span></div>
   </div>
 </div>
 
 <div class="title-bar">
   <h1>${printTitle}</h1>
-  <div class="due">Rok isporuke: <strong>${order.dueDate ?? "nije određen"}</strong></div>
+  <div class="due">Rok isporuke: <strong>${escapeHtml(order.dueDate ?? "nije određen")}</strong></div>
 </div>
 
 ${itemsSection}
@@ -464,18 +467,18 @@ ${itemsSection}
   <div class="card">
     <div class="card-title">Klijent</div>
     ${customer ? `
-      <div class="card-row"><span class="lbl">Ime i prezime</span><span class="val">${customer.firstName} ${customer.lastName}</span></div>
-      <div class="card-row"><span class="lbl">Telefon</span><span class="val">${customer.phone}</span></div>
-      ${customer.templateNumber ? `<div class="card-row"><span class="lbl">Šablon br.</span><span class="val" style="font-family:monospace;font-size:14px;font-weight:800">${customer.templateNumber}</span></div>` : ""}
+      <div class="card-row"><span class="lbl">Ime i prezime</span><span class="val">${escapeHtml(customer.firstName)} ${escapeHtml(customer.lastName)}</span></div>
+      <div class="card-row"><span class="lbl">Telefon</span><span class="val">${escapeHtml(customer.phone)}</span></div>
+      ${customer.templateNumber ? `<div class="card-row"><span class="lbl">Šablon br.</span><span class="val" style="font-family:monospace;font-size:14px;font-weight:800">${escapeHtml(customer.templateNumber)}</span></div>` : ""}
     ` : `<div class="card-row"><span class="lbl">—</span></div>`}
-    ${order.templateNumber && order.templateNumber !== customer?.templateNumber ? `<div class="card-row"><span class="lbl">Šablon (nalog)</span><span class="val" style="font-family:monospace">${order.templateNumber}</span></div>` : ""}
+    ${order.templateNumber && order.templateNumber !== customer?.templateNumber ? `<div class="card-row"><span class="lbl">Šablon (nalog)</span><span class="val" style="font-family:monospace">${escapeHtml(order.templateNumber)}</span></div>` : ""}
   </div>
   <div class="card">
     <div class="card-title">Specifikacija</div>
-    ${order.material ? `<div class="card-row"><span class="lbl">Materijal</span><span class="val">${order.material}</span></div>` : ""}
-    ${order.collarType ? `<div class="card-row"><span class="lbl">Kragna</span><span class="val">${order.collarType}</span></div>` : ""}
-    ${order.sleeveType ? `<div class="card-row"><span class="lbl">Manžetna</span><span class="val">${order.sleeveType}</span></div>` : ""}
-    ${order.fitType ? `<div class="card-row"><span class="lbl">Fit</span><span class="val">${order.fitType}</span></div>` : ""}
+    ${order.material ? `<div class="card-row"><span class="lbl">Materijal</span><span class="val">${escapeHtml(order.material)}</span></div>` : ""}
+    ${order.collarType ? `<div class="card-row"><span class="lbl">Kragna</span><span class="val">${escapeHtml(order.collarType)}</span></div>` : ""}
+    ${order.sleeveType ? `<div class="card-row"><span class="lbl">Manžetna</span><span class="val">${escapeHtml(order.sleeveType)}</span></div>` : ""}
+    ${order.fitType ? `<div class="card-row"><span class="lbl">Fit</span><span class="val">${escapeHtml(order.fitType)}</span></div>` : ""}
   </div>
 </div>
 
@@ -496,16 +499,16 @@ ${hasMonogram ? `
 <div class="mono-section">
   <div class="mono-title">Monogram / Inicijali</div>
   <div class="mono-row">
-    <div><span>Pozicija:</span><strong>${measureData?.monogram_pozicija ?? "—"}</strong></div>
-    <div><span>Boja:</span><strong>${measureData?.monogram_boja || "—"}</strong></div>
-    <div><span>Font:</span><strong>${measureData?.monogram_font ?? "—"}</strong></div>
+    <div><span>Pozicija:</span><strong>${escapeHtml(measureData?.monogram_pozicija ?? "—")}</strong></div>
+    <div><span>Boja:</span><strong>${escapeHtml(measureData?.monogram_boja || "—")}</strong></div>
+    <div><span>Font:</span><strong>${escapeHtml(measureData?.monogram_font ?? "—")}</strong></div>
   </div>
 </div>` : ""}
 
 ${order.notes ? `
 <div class="notes">
   <div class="notes-title">Napomene za krojača</div>
-  <p>${order.notes}</p>
+  <p>${escapeHtml(order.notes)}</p>
 </div>` : ""}
 
 <div class="sign-strip">
@@ -523,7 +526,7 @@ ${order.notes ? `
   </div>
 </div>
 
-<div class="footer">Millimeter D.O.O. · Beograd, Srbija &nbsp;·&nbsp; Štampano: ${printDate} &nbsp;·&nbsp; NALOG ZA KROJAČA</div>
+<div class="footer">Millimeter D.O.O. · Beograd, Srbija &nbsp;·&nbsp; Štampano: ${escapeHtml(printDate)} &nbsp;·&nbsp; NALOG ZA KROJAČA</div>
 
 <script>window.onload = () => { window.print(); }<\/script>
 </body></html>`);

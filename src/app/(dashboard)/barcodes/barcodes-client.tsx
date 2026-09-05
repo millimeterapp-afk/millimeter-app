@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Scan, Tag, Printer, Plus, Check, PackageCheck, Search } from "lucide-react";
 import type { Material, InventoryItem } from "@/lib/db/schema";
+import { escapeHtml, escapeJsString } from "@/lib/print-safe";
 
 type Tab = "scan" | "generate" | "print";
 
@@ -132,9 +133,9 @@ export function BarcodesClient({
 
     const labelsHtml = items.map(item => `
       <div class="label">
-        <p class="name">${item.name}</p>
-        <svg id="bc-${item.id}"></svg>
-        <p class="code">${item.barcode}</p>
+        <p class="name">${escapeHtml(item.name)}</p>
+        <svg id="bc-${escapeHtml(item.id)}"></svg>
+        <p class="code">${escapeHtml(item.barcode)}</p>
       </div>
     `).join("");
 
@@ -155,7 +156,7 @@ export function BarcodesClient({
         <script>
           window.onload = function() {
             ${items.map(item => `
-              JsBarcode("#bc-${item.id}", "${item.barcode}", {
+              JsBarcode("#bc-${escapeJsString(item.id)}", "${escapeJsString(item.barcode)}", {
                 format: "CODE128", width: 1.5, height: 40, displayValue: false, margin: 2
               });
             `).join("")}

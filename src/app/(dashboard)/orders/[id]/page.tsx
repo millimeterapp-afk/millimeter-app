@@ -2,8 +2,10 @@ import { getOrder } from "@/lib/actions/orders";
 import { fetchGoCreateOrdersForCustomer } from "@/lib/actions/customers";
 import { notFound } from "next/navigation";
 import { OrderDetailClient } from "./order-detail-client";
+import { guardSection } from "@/lib/access-guard";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await guardSection("/orders");
   const { id } = await params;
   const order = await getOrder(id);
   if (!order) return notFound();

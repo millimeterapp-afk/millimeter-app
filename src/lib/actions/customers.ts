@@ -11,6 +11,7 @@ import { addGoCreateCustomer, searchGoCreateCustomerByName, getGoCreateOrders, g
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
 import { withTxRetry } from "@/lib/db-retry";
+import { requireAccess } from "@/lib/access-guard";
 
 async function getCompanyId() {
   const { companyId } = await requireActiveUser();
@@ -123,7 +124,8 @@ export async function searchCustomersLite(query: string, id?: string) {
 const nonEmpty = (v: unknown) => v != null && String(v).trim() !== "";
 
 export async function mergeCustomers(keepId: string, loseIds: string[]) {
-  const companyId = await getCompanyId();
+  const dbUser = await requireAccess("/customers");
+  const companyId = dbUser.companyId!;
   const losers = [...new Set(loseIds)].filter((id) => id && id !== keepId);
   if (losers.length === 0) throw new Error("Nema koga da se spoji.");
 
@@ -522,9 +524,22 @@ export async function updateCustomer(
 ) {
   const companyId = await getCompanyId();
 
+  // Eksplicitna bela lista polja — NIKAD `...data` u .set(). Next.js server akcija
+  // je dostupna i kao sirov HTTP poziv (ne samo iz našeg TS koda), pa TypeScript tip
+  // parametra ne štiti runtime od dodatnih polja (npr. companyId, totalSpent) u zahtevu.
+  const updates: Record<string, unknown> = { updatedAt: new Date() };
+  if (data.firstName !== undefined) updates.firstName = data.firstName;
+  if (data.lastName !== undefined) updates.lastName = data.lastName;
+  if (data.phone !== undefined) updates.phone = data.phone;
+  if (data.email !== undefined) updates.email = data.email;
+  if (data.city !== undefined) updates.city = data.city;
+  if (data.address !== undefined) updates.address = data.address;
+  if (data.notes !== undefined) updates.notes = data.notes;
+  if (data.templateNumber !== undefined) updates.templateNumber = data.templateNumber;
+
   await db
     .update(customers)
-    .set({ ...data, updatedAt: new Date() })
+    .set(updates)
     .where(and(eq(customers.id, id), eq(customers.companyId, companyId)));
 
   revalidatePath("/customers");

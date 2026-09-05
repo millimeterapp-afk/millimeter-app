@@ -46,10 +46,18 @@ export async function updateCompany(data: {
   taxId?: string;
 }) {
   const currentUser = await getCurrentUser();
+  if (currentUser.role !== "owner") throw new Error("Samo vlasnik može menjati podatke firme.");
+
+  // Eksplicitna bela lista — `companies` ima i `isActive`/`currency`/`country`, koje
+  // ovaj TS tip ne dozvoljava, ali runtime poziv akcije nije njime ograničen.
+  const updates: Record<string, unknown> = {};
+  if (data.name !== undefined) updates.name = data.name;
+  if (data.address !== undefined) updates.address = data.address;
+  if (data.taxId !== undefined) updates.taxId = data.taxId;
 
   await db
     .update(companies)
-    .set(data)
+    .set(updates)
     .where(eq(companies.id, currentUser.companyId!));
 
   revalidatePath("/settings");
