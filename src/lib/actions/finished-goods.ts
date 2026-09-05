@@ -118,3 +118,79 @@ export async function createFinishedGoodsOrder(data: {
   revalidatePath("/customers");
   revalidatePath("/gotov-proizvod");
 }
+
+// ─── Naplata i preuzimanje (kad je "plati kasnije" pri kreiranju) ─────────────
+// Codex HIGH #5 (5.9): createFinishedGoodsOrder dozvoljava paid:false (obično uz
+// korekciju — "placa se pri preuzimanju"), ali do sada nije postojao NAČIN da se
+// takav nalog kasnije naplati i zatvori — stari i novi tok statusa oba odbijaju
+// orderKind "gotov" (namerno, v. updateOrderStatus/updateOrderPayment/updateNalogStatus),
+// a završetak korekcije (corrections.ts) NE dira status/naplatu ovog naloga.
+// Ova akcija je JEDINI način da se takav nalog naplati i označi preuzetim —
+// namerno odvojena od završetka korekcije (Codex: "završetak korekcije ne sme sam
+// po sebi značiti da je novac primljen").
+export async function completeFinishedGoodsPickup(
+  orderId: string,
+  paymentMethod: "cash" | "card" | "transfer"
+) {
+  const { user, dbUser } = await requireActiveUser();
+  const companyId = dbUser.companyId!;
+  if (!["cash", "card", "transfer"].includes(paymentMethod)) throw new Error("Nepoznat način plaćanja.");
+
+  await withTxRetry(() => db.transaction(async (tx) => {
+    const rows = (await tx.execute(sql`
+      SELECT id, customer_id, total_amount, paid_amount, payment_status, order_kind
+      FROM orders WHERE id = ${orderId} AND company_id = ${companyId} FOR UPDATE
+    `)) as unknown as {
+      id: string; customer_id: string | null; total_amount: string; paid_amount: string;
+      payment_status: string; order_kind: string;
+    }[];
+    const ord = rows[0];
+    if (!ord) throw new Error("Nalog nije pronađen.");
+    if (ord.order_kind !== "gotov") throw new Error("Ova akcija je samo za gotov proizvod.");
+    // Idempotentno: ako je već naplaćen (dupli klik/retry/dva taba), ne knjiži ponovo.
+    if (ord.payment_status === "paid") return;
+
+    const remaining = Number(ord.total_amount) - Number(ord.paid_amount);
+    const today = belgradeToday();
+
+    if (remaining > 0.005) {
+      if (ord.customer_id) {
+        await tx.insert(payments).values({
+          companyId,
+          referenceType: "order",
+          referenceId: ord.id,
+          customerId: ord.customer_id,
+          amount: String(remaining),
+          paymentMethod,
+          paymentDate: today,
+          createdBy: user.id,
+        });
+        const [c] = await tx.update(customers).set({
+          totalSpent: sql`total_spent + ${remaining}`,
+          visitCount: sql`visit_count + 1`,
+          lastVisitDate: today,
+          firstVisitDate: sql`COALESCE(first_visit_date, ${today})`,
+          updatedAt: new Date(),
+        }).where(and(eq(customers.id, ord.customer_id), eq(customers.companyId, companyId)))
+          .returning({ totalSpent: customers.totalSpent });
+        if (c) await tx.update(customers).set({ loyaltyTier: calcLoyaltyTier(Number(c.totalSpent)) })
+          .where(and(eq(customers.id, ord.customer_id), eq(customers.companyId, companyId)));
+      }
+    }
+
+    await tx.update(orders).set({
+      paidAmount: ord.total_amount,
+      paymentStatus: "paid",
+      status: "delivered",
+      nalogStatus: "preuzeto",
+      deliveredAt: new Date(),
+      completedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(and(eq(orders.id, orderId), eq(orders.companyId, companyId)));
+  }));
+
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath("/customers");
+  revalidatePath("/gotov-proizvod");
+}

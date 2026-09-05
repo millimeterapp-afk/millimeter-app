@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateOrderStatus, updateOrderPayment, updateOrder } from "@/lib/actions/orders";
 import { updateNalogStatus, addPurchasePayment, updateOrderItems } from "@/lib/actions/purchases";
+import { completeFinishedGoodsPickup } from "@/lib/actions/finished-goods";
 import { createCorrection } from "@/lib/actions/corrections";
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -272,6 +273,21 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
         router.refresh();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "Greška pri evidentiranju uplate.");
+      }
+    });
+  };
+
+  // Gotov proizvod kreiran sa "plati kasnije" (obično uz korekciju) — jedini način
+  // da se kasnije naplati i zatvori (Codex HIGH #5, 5.9). Namerno odvojeno od
+  // završetka korekcije — jedno ne implicira drugo.
+  const handleCompletePickup = () => {
+    setActionError("");
+    startTransition(async () => {
+      try {
+        await completeFinishedGoodsPickup(order.id, payMethod as "cash" | "card" | "transfer");
+        router.refresh();
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Greška pri naplati.");
       }
     });
   };
@@ -852,6 +868,35 @@ ${order.notes ? `
                 )}
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Gotov proizvod, "plati kasnije" pri kreiranju — jedini put da se naplati i zatvori */}
+      {isGotov && order.paymentStatus !== "paid" && (
+      <Card className="border-amber-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-xs font-medium text-amber-700 uppercase tracking-wide flex items-center gap-2">
+            <CreditCard className="w-4 h-4" /> Čeka naplatu
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Ovaj nalog je kreiran bez naplate (npr. korekcija se plaća pri preuzimanju).
+            Preostaje za naplatu: <strong className="text-foreground">RSD {(Number(order.totalAmount) - Number(order.paidAmount)).toLocaleString("sr-RS")}</strong>
+          </p>
+          <div className="flex items-center gap-2">
+            <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+              className="border rounded-md px-3 py-2 text-sm bg-white">
+              <option value="cash">Gotovina</option>
+              <option value="card">Kartica</option>
+              <option value="transfer">Prenos</option>
+            </select>
+            <button onClick={handleCompletePickup} disabled={isPending}
+              className="flex items-center gap-2 bg-black text-white px-4 py-2 rounded-md text-sm hover:bg-black/80 disabled:opacity-50">
+              <Check className="w-4 h-4" /> Naplati i predaj klijentu
+            </button>
           </div>
         </CardContent>
       </Card>
