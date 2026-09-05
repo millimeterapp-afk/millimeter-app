@@ -329,6 +329,7 @@ export const sales = pgTable("sales", {
   status: text("status").default("completed").notNull(),
   totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
   notes: text("notes"),
+  idempotencyKey: text("idempotency_key"), // sprečava duplu prodaju na retry (partial unique po firmi)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -355,6 +356,7 @@ export const payments = pgTable("payments", {
   paymentDate: date("payment_date").notNull(),
   notes: text("notes"),
   createdBy: uuid("created_by").references(() => users.id),
+  idempotencyKey: text("idempotency_key"), // sprečava duplu uplatu na retry/dvoklik (partial unique po firmi)
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

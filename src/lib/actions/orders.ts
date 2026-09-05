@@ -5,10 +5,11 @@ import { orders, materialReservations, productionTasks, materials, customers } f
 import { syncCustomerToGoCreate } from "@/lib/actions/customers";
 import { calcLoyaltyTier } from "@/lib/loyalty";
 import { requireActiveUser } from "@/lib/auth";
-import { eq, desc, and, sql, notInArray } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { withTxRetry } from "@/lib/db-retry";
 import { revalidatePath } from "next/cache";
 import { belgradeToday } from "@/lib/datetime";
+import { recalcPurchaseTotalsSql } from "@/lib/actions/purchases";
 
 async function getCurrentUser() {
   const { user, dbUser } = await requireActiveUser();
@@ -361,29 +362,57 @@ export async function updateOrder(
   }
 ) {
   const { dbUser } = await getCurrentUser();
+  const companyId = dbUser.companyId!;
 
-  // Ne dozvoli izmjenu iznosa/materijala/podataka na ZATVORENOM nalogu (isporučen/otkazan) —
-  // inače bi stari tab promijenio totalAmount poslije knjiženja (klijent knjižen na stari iznos).
-  const updated = await db
-    .update(orders)
-    .set({
-      ...( data.item !== undefined && { item: data.item }),
-      ...( data.totalAmount !== undefined && { totalAmount: String(data.totalAmount) }),
-      ...( data.dueDate !== undefined && { dueDate: data.dueDate || null }),
-      ...( data.notes !== undefined && { notes: data.notes || null }),
-      ...( data.collarType !== undefined && { collarType: data.collarType }),
-      ...( data.sleeveType !== undefined && { sleeveType: data.sleeveType }),
-      ...( data.fitType !== undefined && { fitType: data.fitType }),
-      ...( data.material !== undefined && { material: data.material || null }),
-      ...( data.productionFlow !== undefined && { productionFlow: data.productionFlow }),
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(orders.id, id), eq(orders.companyId, dbUser.companyId!),
-      notInArray(orders.status, ["delivered", "cancelled"]),
-    ))
-    .returning({ id: orders.id });
-  if (updated.length === 0) throw new Error("Nalog ne postoji ili je zatvoren (isporučen/otkazan) — izmjena nije moguća.");
+  await db.transaction(async (tx) => {
+    // Nalozi iz porudžbine se vode kroz nalogStatus, ne stari status (koji za njih
+    // ostaje "draft" zauvek) — provera SAMO starog statusa bi propuštala izmene na
+    // već preuzetim/otkazanim nalozima iz porudžbine (Codex HIGH #6). Zaključaj
+    // porudžbinu pa nalog (isti redosled kao updateNalogStatus/updateOrderItems).
+    const peek = await tx.query.orders.findFirst({
+      where: (o, { eq, and }) => and(eq(o.id, id), eq(o.companyId, companyId)),
+      columns: { purchaseId: true },
+    });
+    if (!peek) throw new Error("Nalog nije pronađen.");
+    if (peek.purchaseId) {
+      await tx.execute(sql`SELECT id FROM purchases WHERE id = ${peek.purchaseId} AND company_id = ${companyId} FOR UPDATE`);
+    }
+    const lockedRows = (await tx.execute(sql`
+      SELECT id, status, nalog_status, purchase_id,
+        (SELECT count(*) FROM order_items WHERE order_id = orders.id)::int AS item_count
+      FROM orders WHERE id = ${id} AND company_id = ${companyId} FOR UPDATE
+    `)) as unknown as { id: string; status: string; nalog_status: string; purchase_id: string | null; item_count: number }[];
+    const L = lockedRows[0];
+    if (!L) throw new Error("Nalog nije pronađen.");
+    if (L.status === "delivered" || L.status === "cancelled" ||
+        L.nalog_status === "preuzeto" || L.nalog_status === "otkazano") {
+      throw new Error("Nalog je zatvoren (preuzet/isporučen ili otkazan) — izmena nije moguća.");
+    }
+    // Nalog sa stavkama: ukupan iznos se računa IZ stavki (updateOrderItems), ne piše
+    // se ovde direktno — inače orders.totalAmount i zbir stavki/porudžbine razjedu se.
+    if (data.totalAmount !== undefined && L.item_count > 0) {
+      throw new Error("Nalog ima stavke — izmeni cenu kroz stavke, ne direktno iznos naloga.");
+    }
+
+    await tx.update(orders)
+      .set({
+        ...( data.item !== undefined && { item: data.item }),
+        ...( data.totalAmount !== undefined && { totalAmount: String(data.totalAmount) }),
+        ...( data.dueDate !== undefined && { dueDate: data.dueDate || null }),
+        ...( data.notes !== undefined && { notes: data.notes || null }),
+        ...( data.collarType !== undefined && { collarType: data.collarType }),
+        ...( data.sleeveType !== undefined && { sleeveType: data.sleeveType }),
+        ...( data.fitType !== undefined && { fitType: data.fitType }),
+        ...( data.material !== undefined && { material: data.material || null }),
+        ...( data.productionFlow !== undefined && { productionFlow: data.productionFlow }),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(orders.id, id), eq(orders.companyId, companyId)));
+
+    if (data.totalAmount !== undefined && L.purchase_id) {
+      await tx.execute(recalcPurchaseTotalsSql(L.purchase_id, companyId));
+    }
+  });
 
   revalidatePath(`/orders/${id}`);
   revalidatePath("/orders");

@@ -14,8 +14,14 @@ async function getCurrentUser() {
   return { user, dbUser };
 }
 
-async function generateSaleNumber(companyId: string): Promise<string> {
-  const result = await db
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Prima `tx` (transakcijsku konekciju), NE globalni `db` — pool ima samo 3 konekcije
+// (db/index.ts), a ovo se zove IZNUTRA transakcije koja već drži jednu. Tri paralelne
+// prodaje bi svaka tražila JOŠ jednu konekciju za ovaj upit i međusobno se zaključale
+// čekajući konekciju koju drži neka od preostalih (Codex MEDIUM #11).
+async function generateSaleNumber(tx: Tx, companyId: string): Promise<string> {
+  const result = await tx
     .select({ count: sql<number>`count(*)` })
     .from(sales)
     .where(eq(sales.companyId, companyId));
@@ -48,6 +54,7 @@ export async function createSale(data: {
     unitPrice: number;
   }>;
   notes?: string;
+  idempotencyKey?: string;
 }) {
   const { user, dbUser } = await getCurrentUser();
   const companyId = dbUser.companyId!;
@@ -76,7 +83,14 @@ export async function createSale(data: {
   // UNUTAR retry-ja da paralelna kolizija (23505 na UNIQUE) dobije novi broj umjesto pada.
   // Cijena i stanje za artikle iz zaliha se čitaju iz baze pod ključem (FOR UPDATE).
   const sale = await withTxRetry(() => db.transaction(async (tx) => {
-    const saleNumber = await generateSaleNumber(companyId);
+    if (data.idempotencyKey) {
+      const existing = await tx.query.sales.findFirst({
+        where: (s, { eq, and }) => and(eq(s.companyId, companyId), eq(s.idempotencyKey, data.idempotencyKey!)),
+      });
+      if (existing) return existing; // isti zahtev je već prošao (retry/dvoklik) — vrati postojeću
+    }
+
+    const saleNumber = await generateSaleNumber(tx, companyId);
     // 1) Razriješi cijene i provjeri stanje za svaku stavku
     const resolved = [] as Array<{
       itemName: string;
@@ -128,6 +142,7 @@ export async function createSale(data: {
         status: "completed",
         totalAmount: String(totalAmount),
         notes: data.notes || null,
+        idempotencyKey: data.idempotencyKey ?? null,
       })
       .returning();
 

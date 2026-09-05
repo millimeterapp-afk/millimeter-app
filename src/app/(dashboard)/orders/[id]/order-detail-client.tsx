@@ -105,6 +105,9 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
   const [showPayment, setShowPayment] = useState(false);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
+  // Isti ključ za sve pokušaje jedne uplate — retry (izgubljen odgovor, dvoklik)
+  // ne knjiži dvaput istu uplatu (Codex HIGH #7). Nov ključ posle svake uspešne uplate.
+  const [payIdemKey, setPayIdemKey] = useState(() => crypto.randomUUID());
   const [showCorrection, setShowCorrection] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [materialQty, setMaterialQty] = useState("2");
@@ -264,12 +267,13 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
     startTransition(async () => {
       try {
         if (hasPurchase) {
-          await addPurchasePayment(order.purchase!.id, amount, payMethod as "cash" | "card" | "transfer");
+          await addPurchasePayment(order.purchase!.id, amount, payMethod as "cash" | "card" | "transfer", payIdemKey);
         } else {
           await updateOrderPayment(order.id, Math.min(payPaid + amount, payTotal), payTotal);
         }
         setShowPayment(false);
         setPayAmount("");
+        setPayIdemKey(crypto.randomUUID());
         router.refresh();
       } catch (e) {
         setActionError(e instanceof Error ? e.message : "Greška pri evidentiranju uplate.");

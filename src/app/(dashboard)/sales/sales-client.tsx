@@ -102,6 +102,9 @@ export function SalesClient({
   const total = cart.reduce((sum, c) => sum + c.price * c.qty, 0);
 
   const [saleError, setSaleError] = useState("");
+  // Isti ključ za sve pokušaje jedne prodaje — retry (izgubljen odgovor, dvoklik na
+  // Naplati) ne pravi duplu prodaju/duplo skidanje sa stanja. Nov ključ posle uspeha.
+  const [saleIdemKey, setSaleIdemKey] = useState(() => crypto.randomUUID());
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
@@ -118,11 +121,13 @@ export function SalesClient({
             unitPrice: c.price,
             totalPrice: c.price * c.qty,
           })),
+          idempotencyKey: saleIdemKey,
         });
         setCart([]);
         setSelectedCustomer(null);
         setSearch(""); // sakrij staru listu rezultata poslije prodaje
         setSuccess(true);
+        setSaleIdemKey(crypto.randomUUID());
         setTimeout(() => setSuccess(false), 3000);
         router.refresh();
       } catch (e) {

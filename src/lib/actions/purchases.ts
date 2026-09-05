@@ -295,7 +295,7 @@ export async function getPurchase(id: string) {
 // ─── Preračun ukupnog porudžbine ──────────────────────────────────────────────
 // Ukupno = zbir naloga koji NISU otkazani. Ponovo izračuna i status plaćanja.
 // Jedna atomarna izjava — koristi se u više akcija (otkazivanje naloga, izmjena stavki).
-const recalcPurchaseTotalsSql = (purchaseId: string, companyId: string) => sql`
+export const recalcPurchaseTotalsSql = (purchaseId: string, companyId: string) => sql`
   WITH t AS (
     SELECT COALESCE(SUM(total_amount), 0) AS total
     FROM orders WHERE purchase_id = ${purchaseId} AND company_id = ${companyId} AND nalog_status <> 'otkazano'
@@ -444,15 +444,32 @@ export async function updateOrderItems(orderId: string, items: EditItem[]) {
     if (!Number.isFinite(it.unitPrice) || it.unitPrice < 0) throw new Error("Cena mora biti broj ≥ 0.");
   }
 
-  // Nalog mora pripadati firmi (cross-tenant zaštita)
-  const order = await db.query.orders.findFirst({
+  // Nalog mora pripadati firmi — samo da saznamo purchaseId za zaključavanje ispod.
+  const peek = await db.query.orders.findFirst({
     where: (o, { eq, and }) => and(eq(o.id, orderId), eq(o.companyId, companyId)),
+    columns: { purchaseId: true },
   });
-  if (!order) throw new Error("Nalog nije pronađen.");
+  if (!peek) throw new Error("Nalog nije pronađen.");
 
   const nalogTotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
 
   await db.transaction(async (tx) => {
+    // ZAKLJUČAVANJE (porudžbina pa nalog, isti redosled kao updateNalogStatus) PRE
+    // brisanja/upisa stavki — bez ovoga dve paralelne izmene istog naloga mogu
+    // ostaviti obe grupe stavki dok totalAmount sadrži samo poslednji iznos (Codex HIGH #6).
+    if (peek.purchaseId) {
+      await tx.execute(sql`SELECT id FROM purchases WHERE id = ${peek.purchaseId} AND company_id = ${companyId} FOR UPDATE`);
+    }
+    const lockedRows = (await tx.execute(sql`
+      SELECT id, purchase_id, status, nalog_status FROM orders WHERE id = ${orderId} AND company_id = ${companyId} FOR UPDATE
+    `)) as unknown as { id: string; purchase_id: string | null; status: string; nalog_status: string }[];
+    const locked = lockedRows[0];
+    if (!locked) throw new Error("Nalog nije pronađen.");
+    if (locked.status === "delivered" || locked.status === "cancelled" ||
+        locked.nalog_status === "preuzeto" || locked.nalog_status === "otkazano") {
+      throw new Error("Nalog je zatvoren (preuzet/isporučen ili otkazan) — stavke se ne mogu menjati.");
+    }
+
     await tx.delete(orderItems).where(eq(orderItems.orderId, orderId));
     await tx.insert(orderItems).values(items.map((it) => ({
       orderId,
@@ -471,7 +488,7 @@ export async function updateOrderItems(orderId: string, items: EditItem[]) {
     await tx.update(orders)
       .set({ totalAmount: String(nalogTotal), updatedAt: new Date() })
       .where(and(eq(orders.id, orderId), eq(orders.companyId, companyId)));
-    if (order.purchaseId) await tx.execute(recalcPurchaseTotalsSql(order.purchaseId, companyId));
+    if (locked.purchase_id) await tx.execute(recalcPurchaseTotalsSql(locked.purchase_id, companyId));
   });
 
   revalidatePath(`/orders/${orderId}`);
@@ -482,7 +499,8 @@ export async function updateOrderItems(orderId: string, items: EditItem[]) {
 export async function addPurchasePayment(
   purchaseId: string,
   amount: number,
-  method: "cash" | "card" | "transfer" = "cash"
+  method: "cash" | "card" | "transfer" = "cash",
+  idempotencyKey?: string
 ) {
   const { user, dbUser } = await getCurrentUser();
   const companyId = dbUser.companyId!;
@@ -490,8 +508,17 @@ export async function addPurchasePayment(
   if (!["cash", "card", "transfer"].includes(method)) throw new Error("Nepoznat način plaćanja.");
 
   // Zaključavanje porudžbine: paralelna dupla uplata (dva taba, retry) inače
-  // upiše obje i pređe preko ukupnog iznosa.
+  // upiše obje i pređe preko ukupnog iznosa. Provera preplate NE hvata ponovljen
+  // ZAHTEV za delimičnu uplatu (10.000 od 50.000 duga, izgubljen odgovor, retry —
+  // drugi put i dalje ima dovoljno duga da prođe) — zato idempotencyKey (Codex HIGH #7).
   await db.transaction(async (tx) => {
+    if (idempotencyKey) {
+      const dup = (await tx.execute(sql`
+        SELECT id FROM payments WHERE company_id = ${companyId} AND idempotency_key = ${idempotencyKey} LIMIT 1
+      `)) as unknown as { id: string }[];
+      if (dup[0]) return; // isti zahtev je već prošao — no-op
+    }
+
     const rows = (await tx.execute(
       sql`SELECT id, customer_id, total_amount, paid_amount FROM purchases
           WHERE id = ${purchaseId} AND company_id = ${companyId} FOR UPDATE`
@@ -513,6 +540,7 @@ export async function addPurchasePayment(
       paymentMethod: method,
       paymentDate: belgradeToday(),
       createdBy: user.id,
+      idempotencyKey: idempotencyKey ?? null,
     });
 
     await tx.update(purchases)
