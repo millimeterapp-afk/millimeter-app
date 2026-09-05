@@ -313,12 +313,17 @@ export async function updateOrderPayment(
 ) {
   const { dbUser } = await getCurrentUser();
 
-  // Gotov proizvod ima svoju naplatu (payments + totalSpent); ovaj stari update bi samo
-  // dirao paidAmount/paymentStatus bez evidencije uplate i loyalty-ja.
+  // Nalog koji pripada porudžbini ima ISPRAVAN tok naplate (addPurchasePayment —
+  // payments + purchases.paidAmount + customer.totalSpent, sa zaključavanjem).
+  // Ovaj stari update samo piše orders.paidAmount/paymentStatus direktno, bez ičega
+  // od toga — ne sme se primeniti na nalog koji ima purchaseId (Codex HIGH #3/#4),
+  // ISTA provera kao u updateOrderStatus, samo je ovde ranije nedostajala.
+  // Gotov proizvod ima svoju naplatu (payments + totalSpent) — isti razlog.
   const ord = await db.query.orders.findFirst({
     where: (o, { eq, and }) => and(eq(o.id, id), eq(o.companyId, dbUser.companyId!)),
-    columns: { orderKind: true },
+    columns: { orderKind: true, purchaseId: true },
   });
+  if (ord?.purchaseId) throw new Error("Ovaj nalog pripada porudžbini — koristi naplatu na porudžbini, ne stari tok.");
   if (ord?.orderKind === "gotov") throw new Error("Gotov proizvod ima svoju naplatu — ne koristi stari tok uplate.");
 
   const paymentStatus =

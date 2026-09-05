@@ -317,7 +317,7 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
   };
 
   const handlePrint = () => {
-    const measureData = order.measurementSnapshot as Record<string, string> | null;
+    const snapshot = order.measurementSnapshot as Record<string, unknown> | null;
     const w = window.open("", "_blank");
     if (!w) return;
 
@@ -333,11 +333,31 @@ export function OrderDetailClient({ order, gcOrders = [], gcUnavailable = false 
     };
     const MEASURE_ORDER = ["vrat","grudi","struk","stomak","kukovi","duzina_napred","duzina_nazad","aksla","ledja","rukav","biceps","podlaktica","zglob"];
 
-    const measures = measureData
-      ? MEASURE_ORDER
-          .filter(k => measureData[k] && measureData[k] !== "—")
-          .map(k => ({ label: MEASURE_LABELS[k] ?? k, value: escapeHtml(measureData[k]) }))
-      : [];
+    // Nalog za košulju (nalog-kosulja) čuva mere u NOVOM obliku (mereSaStrane/bazneMere
+    // iz src/lib/kosulja.ts), ne u starom ravnom obliku {vrat:"40", grudi:"98-102"}.
+    // Bez ove grane štampa nove košulje izlazi bez ijedne mere (Codex HIGH #9, 5.9).
+    const mereSaStrane = snapshot?.mereSaStrane as
+      { key: string; label: string; konacno: number | null }[] | null | undefined;
+    const bazneMereSnapshot = snapshot?.bazneMere as
+      { letter: string; sr: string; obim: number }[] | null | undefined;
+    const OSTALE_SLOVA = new Set(["D", "J", "M"]); // rame, dugačak rukav, kragna
+
+    const measureData = !mereSaStrane ? (snapshot as Record<string, string> | null) : null;
+
+    const measures = mereSaStrane
+      ? [
+          ...mereSaStrane
+            .filter((m) => m.konacno !== null)
+            .map((m) => ({ label: m.label, value: escapeHtml(m.konacno) })),
+          ...(bazneMereSnapshot ?? [])
+            .filter((b) => OSTALE_SLOVA.has(b.letter))
+            .map((b) => ({ label: b.sr, value: escapeHtml(b.obim) })),
+        ]
+      : measureData
+        ? MEASURE_ORDER
+            .filter(k => measureData[k] && measureData[k] !== "—")
+            .map(k => ({ label: MEASURE_LABELS[k] ?? k, value: escapeHtml(measureData[k]) }))
+        : [];
 
     const hasMonogram = measureData?.monogram_pozicija;
     const specs = [

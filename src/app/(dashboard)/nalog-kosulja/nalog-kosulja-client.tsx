@@ -67,8 +67,6 @@ export function NalogKosuljaClient() {
           materijal: materijal || undefined,
           cena: Number(cena) || 0,
           korekcije,
-          bazneMere: baza,
-          mereSaStrane: mere ?? undefined,
           monogram: inicijali
             ? { tekst: monogramTekst, mesto: monogramMesto, boja: monogramBoja, font: monogramFont }
             : undefined,
